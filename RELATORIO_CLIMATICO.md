@@ -149,4 +149,4 @@ O VPD é um indicador crítico de estresse hídrico das plantas:
 
 ---
 
-*Relatório gerado automaticamente · Dados: Arable Cloud API e WeatherLink · Análise: Agrometeologia Vylor*
+*Relatório gerado automaticamente · Dados: Arable Cloud API e WeatherLink · Análise: Agrometerologia Vylor*

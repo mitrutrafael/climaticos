@@ -1,5 +1,5 @@
 ﻿/* =============================================
-Agrometeologia Vylor — app.js
+Agrometerologia Vylor — app.js
    Dados ao vivo via Arable Cloud API (CORS OK)
    Atualização automática a cada 30 minutos
    ============================================= */
