@@ -7,6 +7,7 @@
 const API_KEY  = 'fe8e9cf2-b5b8-4f0b-90e9-1163ada8a2f7';
 const API_BASE = 'https://api.arable.cloud/api/v2';
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
+const API_TIMEOUT_MS = 15000; // timeout por requisição à API
 
 const BR_STATIONS = [
   { name:'D009893', site:'BO Fatima do Sul',    city:'Fatima do Sul',     state:'MS' },
@@ -32,10 +33,18 @@ const CHART_DEFAULTS = {
 };
 
 let rawData = [];
+let csvData = [];
 let filteredData = [];
 let charts = {};
 let refreshTimer = null;
 let lastUpdate = null;
+
+function fetchWithTimeout(url, options = {}, ms = API_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => clearTimeout(timer));
+}
 
 /* ==========================================
    FETCH LIVE DATA — Arable API
@@ -44,10 +53,10 @@ async function fetchLiveData(startDate, endDate) {
   setLoadingState(true, 'Buscando dados ao vivo...');
   rawData = [];
 
-  const fetchPromises = BR_STATIONS.map(async (station) => {
+const fetchPromises = BR_STATIONS.map(async (station) => {
     const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=200`;
     try {
-      const res = await fetch(url, {
+      const res = await fetchWithTimeout(url, {
         headers: { 'Authorization': `Apikey ${API_KEY}` }
       });
       if (!res.ok) return;
@@ -80,11 +89,22 @@ async function fetchLiveData(startDate, endDate) {
     }
   });
 
-  const results = await Promise.all(fetchPromises);
+const results = await Promise.all(fetchPromises);
   results.forEach(rows => { if (rows) rawData.push(...rows); });
 
   if (rawData.length === 0) {
-    // Fallback: tentar CSV local
+    if (csvData.length) {
+      // API indisponível/muitos dados: mantém a base local já carregada
+      rawData = csvData;
+      lastUpdate = null;
+      setLoadingState(false);
+      updateLastUpdateBadge();
+      showToast('📁 API indisponível — usando dados da base local.');
+      initFilters();
+      applyFilters();
+      return;
+    }
+    // Sem API e sem CSV: tenta carregar o CSV local
     await loadFromCSV();
     return;
   }
@@ -103,7 +123,8 @@ async function loadFromCSV() {
     Papa.parse('dados_climaticos_brasil.csv', {
       download: true, header: true, dynamicTyping: true, skipEmptyLines: true,
       complete(result) {
-        rawData = result.data;
+        csvData = result.data;
+        rawData = csvData;
         lastUpdate = null; // indica dados locais
         setLoadingState(false);
         updateLastUpdateBadge();
@@ -112,8 +133,12 @@ async function loadFromCSV() {
         resolve();
       },
       error() {
-        document.getElementById('loadingOverlay').innerHTML =
-          '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Sem conexão com a API e sem CSV local.<br>Verifique sua conexão.</div></div>';
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) {
+          overlay.innerHTML =
+            '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Sem conexão com a API e sem CSV local.<br>Verifique sua conexão.</div></div>';
+        }
+        setLoadingState(false);
         resolve();
       }
     });
@@ -406,7 +431,14 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('startDate').value = fmt8601(start);
   document.getElementById('endDate').value   = fmt8601(today);
 
-  fetchLiveData(fmt8601(start), fmt8601(today));
+  // 1) Carrega a base local primeiro (rápido e confiável)
+  loadFromCSV().then(() => {
+    // 2) Tenta atualizar com a API ao vivo em segundo plano
+    const s = document.getElementById('startDate').value;
+    const e = document.getElementById('endDate').value;
+    fetchLiveData(s, e);
+  });
+
   scheduleAutoRefresh();
 });
 
