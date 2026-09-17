@@ -1,0 +1,137 @@
+﻿<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dashboard Climático | Estações Arable Brasil</title>
+  <meta name="description" content="Dashboard de monitoramento climático das estações Arable no Brasil — dados ao vivo com atualização automática." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="header">
+  <div class="header-inner">
+    <div class="brand">
+      <div class="brand-icon">🌤️</div>
+      <div>
+        <h1 class="brand-title">Estacoes Arable Brazil</h1>
+        <span class="brand-sub">Estações Arable · Dados ao Vivo · Atualização Automática</span>
+      </div>
+    </div>
+    <div class="header-meta">
+      <div class="header-badge" id="totalStations">— Estações</div>
+      <div class="header-badge" id="totalRecords">— Registros</div>
+      <div class="header-badge" id="lastUpdateBadge" title="Última atualização">🔄 Carregando...</div>
+      <div class="header-badge live-badge">● LIVE</div>
+    </div>
+  </div>
+</header>
+
+<section class="filter-bar">
+  <div class="filter-inner">
+    <div class="filter-group">
+      <label for="stationFilter">Estação</label>
+      <select id="stationFilter"><option value="all">Todas as Estações</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="stateFilter">Estado (UF)</label>
+      <select id="stateFilter"><option value="all">Todos</option></select>
+    </div>
+    <div class="filter-group">
+      <label for="startDate">De</label>
+      <input type="date" id="startDate" />
+    </div>
+    <div class="filter-group">
+      <label for="endDate">Até</label>
+      <input type="date" id="endDate" />
+    </div>
+    <button class="btn-apply" id="applyFilter">Aplicar</button>
+    <button class="btn-reset" id="resetFilter">Resetar</button>
+    <button class="btn-refresh" id="refreshBtn" title="Buscar dados mais recentes agora">↻ Atualizar</button>
+  </div>
+</section>
+
+<section class="kpi-section">
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-icon">🌡️</div><div class="kpi-body"><div class="kpi-label">Temp. Média</div><div class="kpi-value" id="kpi-temp-val">—</div><div class="kpi-sub" id="kpi-temp-range">—</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">💧</div><div class="kpi-body"><div class="kpi-label">Umidade Média</div><div class="kpi-value" id="kpi-rh-val">—</div><div class="kpi-sub">Umidade Relativa do Ar</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">🌬️</div><div class="kpi-body"><div class="kpi-label">Vento Médio</div><div class="kpi-value" id="kpi-wind-val">—</div><div class="kpi-sub">m/s</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">☀️</div><div class="kpi-body"><div class="kpi-label">VPD Médio</div><div class="kpi-value" id="kpi-vpd-val">—</div><div class="kpi-sub">kPa</div></div></div>
+  </div>
+</section>
+
+<section class="charts-section">
+  <div class="charts-grid-wide">
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">🌡️ Temperatura Diária (°C)</span><span class="chart-subtitle">Máx · Média · Mín</span></div>
+      <div class="chart-wrap"><canvas id="chartTemp"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">🌧️ Precipitação (mm)</span><span class="chart-subtitle">Acumulado diário</span></div>
+      <div class="chart-wrap"><canvas id="chartPrecip"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section class="charts-section">
+  <div class="charts-grid-3">
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">💧 Umidade Relativa (%)</span></div>
+      <div class="chart-wrap"><canvas id="chartRH"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">🌿 Evapotranspiração (mm)</span></div>
+      <div class="chart-wrap"><canvas id="chartET"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">☀️ VPD (kPa)</span></div>
+      <div class="chart-wrap"><canvas id="chartVPD"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section class="charts-section">
+  <div class="charts-grid-wide">
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">📊 Comparativo por Estação</span><span class="chart-subtitle">Temperatura média</span></div>
+      <div class="chart-wrap"><canvas id="chartCompare"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">🌬️ Velocidade do Vento (m/s)</span></div>
+      <div class="chart-wrap"><canvas id="chartWind"></canvas></div>
+    </div>
+  </div>
+</section>
+
+<section class="table-section">
+  <div class="table-card">
+    <div class="chart-header"><span class="chart-title">📋 Estações Monitoradas</span><span class="chart-subtitle">Resumo por dispositivo</span></div>
+    <div class="table-wrap">
+      <table id="stationsTable">
+        <thead>
+          <tr>
+            <th>Dispositivo</th><th>Site</th><th>Cidade</th><th>UF</th>
+            <th>T. Média (°C)</th><th>T. Max (°C)</th><th>T. Min (°C)</th>
+            <th>UR (%)</th><th>Precip (mm)</th><th>ETo (mm)</th>
+            <th>Vento (m/s)</th><th>VPD (kPa)</th>
+          </tr>
+        </thead>
+        <tbody id="stationsTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>Dados ao vivo: <strong>Arable Cloud API v2</strong> · Atualização automática a cada 30 min · Estações Brasil · Estacoes Arable Brazil</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>

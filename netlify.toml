@@ -1,0 +1,17 @@
+﻿# netlify.toml — Configuração para deploy no Netlify
+[build]
+  publish = "."
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Permite servir CSV corretamente
+[[headers]]
+  for = "/*.csv"
+  [headers.values]
+    Content-Type = "text/csv; charset=utf-8"
+    Cache-Control = "no-cache"

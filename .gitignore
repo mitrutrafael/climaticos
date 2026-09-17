@@ -1,0 +1,13 @@
+# R
+.Rhistory
+.RData
+.Ruserdata
+
+# Saídas geradas pelos scripts R
+grafico_*.png
+resumo_por_estacao.csv
+correlacao_variaveis.csv
+
+# Sistema
+Thumbs.db
+Desktop.ini
