@@ -27,6 +27,18 @@ O **Estacoes Arable Brazil** é uma plataforma de visualização e análise de d
 | D009878 | BM Sorriso | Sorriso | MT | ✅ Ativa |
 | D009876 | Corteva GPB BL | Ponta Grossa | PR | ✅ Ativa |
 
+### Davis (WeatherLink)
+
+| Dispositivo | Site | Cidade | UF | Status |
+|-------------|------|--------|----|--------|
+| DV13917 | Corteva Passo Fundo | Passo Fundo | RS | ✅ Ativa |
+| DV16450 | Corteva Guarapuava | Guarapuava | PR | ✅ Ativa |
+| DV18648 | Corteva Ponta Grossa | Ponta Grossa | PR | ✅ Ativa |
+| DV59252 | Corteva Toledo | Toledo | PR | ✅ Ativa |
+
+> As estações Davis são incluídas no dashboard a partir do CSV `dados_davis_brasil.csv`,
+> gerado pelo script `atualizar_davis.ps1` (WeatherLink v2 API). Requer assinatura **Pro** para histórico.
+
 ---
 
 ## 📊 Variáveis Climáticas
@@ -54,7 +66,9 @@ climaticos/
 ├── index.html                    # Dashboard principal
 ├── style.css                     # Estilo premium (dark mode)
 ├── app.js                        # Lógica do dashboard (Chart.js + PapaParse)
-├── dados_climaticos_brasil.csv   # Dados brutos (Jul–Set 2026 · 632 registros)
+├── dados_climaticos_brasil.csv   # Dados Arable (Jul–Set 2026 · 632 registros)
+├── dados_davis_brasil.csv        # Dados Davis/WeatherLink (Jul–Set 2026 · 300 registros)
+├── atualizar_davis.ps1           # Script para baixar/atualizar dados Davis (requer chave API)
 ├── analise_climatica_arable.R    # Script R de análise estatística
 ├── RELATORIO_CLIMATICO.md        # Relatório técnico
 └── README.md                     # Este arquivo
@@ -88,6 +102,18 @@ Acesse: [http://localhost:8080](http://localhost:8080)
 setwd("c:/Antigravity/climaticos")
 source("analise_climatica_arable.R")
 ```
+
+---
+
+## 📡 Atualizar Dados Davis (WeatherLink)
+
+```powershell
+$env:DAVIS_API_KEY   = "sua chave v2"
+$env:DAVIS_API_SECRET = "seu segredo v2"
+powershell -ExecutionPolicy Bypass -File atualizar_davis.ps1 -StartDate 2026-07-01 -EndDate 2026-09-17
+```
+
+> ⚠️ O segredo da API **não deve** ser commitado no repositório. Após gerar o CSV, faça `git add` + `git push` para atualizar o dashboard no GitHub Pages.
 
 ---
 

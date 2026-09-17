@@ -27,7 +27,10 @@ theme_set(theme_dark() + theme(
 
 # ---- Carregar dados ----
 csv_path <- "dados_climaticos_brasil.csv"
-df <- read.csv(csv_path, stringsAsFactors=FALSE)
+df <- rbind(
+  read.csv(csv_path,                  stringsAsFactors=FALSE),
+  read.csv("dados_davis_brasil.csv",  stringsAsFactors=FALSE)
+)
 df$date  <- as.Date(df$date)
 df$month <- month(df$date, label=TRUE, abbr=TRUE)
 df$week  <- floor_date(df$date, "week")

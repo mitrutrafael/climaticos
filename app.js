@@ -116,33 +116,39 @@ const results = await Promise.all(fetchPromises);
   applyFilters();
 }
 
+function parseCSV(url) {
+  return new Promise((resolve, reject) => {
+    Papa.parse(url, {
+      download: true, header: true, dynamicTyping: true, skipEmptyLines: true,
+      complete: (r) => resolve(r.data),
+      error: (e) => reject(e)
+    });
+  });
+}
+
 async function loadFromCSV() {
   console.warn('API falhou, tentando CSV local...');
   setLoadingState(true, 'Carregando CSV local...');
-  return new Promise((resolve) => {
-    Papa.parse('dados_climaticos_brasil.csv', {
-      download: true, header: true, dynamicTyping: true, skipEmptyLines: true,
-      complete(result) {
-        csvData = result.data;
-        rawData = csvData;
-        lastUpdate = null; // indica dados locais
-        setLoadingState(false);
-        updateLastUpdateBadge();
-        initFilters();
-        applyFilters();
-        resolve();
-      },
-      error() {
-        const overlay = document.getElementById('loadingOverlay');
-        if (overlay) {
-          overlay.innerHTML =
-            '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Sem conexão com a API e sem CSV local.<br>Verifique sua conexão.</div></div>';
-        }
-        setLoadingState(false);
-        resolve();
-      }
-    });
-  });
+  try {
+    const [arable, davis] = await Promise.all([
+      parseCSV('dados_climaticos_brasil.csv'),
+      parseCSV('dados_davis_brasil.csv')
+    ]);
+    csvData = [...arable, ...davis].filter(r => r.device && r.date);
+    rawData = csvData;
+    lastUpdate = null; // indica dados locais
+    setLoadingState(false);
+    updateLastUpdateBadge();
+    initFilters();
+    applyFilters();
+  } catch (e) {
+    const overlay = document.getElementById('loadingOverlay');
+    if (overlay) {
+      overlay.innerHTML =
+        '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Sem conexão com a API e sem CSV local.<br>Verifique sua conexão.</div></div>';
+    }
+    setLoadingState(false);
+  }
 }
 
 function setLoadingState(loading, msg = '') {
