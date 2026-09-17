@@ -62,7 +62,9 @@
     <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌬️</div><div class="kpi-body"><div class="kpi-label">Vento Médio</div><div class="kpi-value" id="kpi-wind-val">—</div><div class="kpi-sub">m/s</div></div></div>
-    <div class="kpi-card"><div class="kpi-icon">☀️</div><div class="kpi-body"><div class="kpi-label">VPD Médio</div><div class="kpi-value" id="kpi-vpd-val">—</div><div class="kpi-sub">kPa</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">🌡️</div><div class="kpi-body"><div class="kpi-label">VPD Médio</div><div class="kpi-value" id="kpi-vpd-val">—</div><div class="kpi-sub">kPa</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">☀️</div><div class="kpi-body"><div class="kpi-label">Radiação Solar</div><div class="kpi-value" id="kpi-swdw-val">—</div><div class="kpi-sub">MJ/m² (SWDW)</div></div></div>
+    <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">NDVI Médio</div><div class="kpi-value" id="kpi-ndvi-val">—</div><div class="kpi-sub">Índice de Vegetação</div></div></div>
   </div>
 </section>
 
@@ -99,9 +101,18 @@
 <section class="charts-section">
   <div class="charts-grid-wide">
     <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">☀️ Radiação Solar (MJ/m²)</span><span class="chart-subtitle">SWDW - Shortwave Downward</span></div>
+      <div class="chart-wrap"><canvas id="chartSWDW"></canvas></div>
+    </div>
+    <div class="chart-card">
       <div class="chart-header"><span class="chart-title">📊 Comparativo por Estação</span><span class="chart-subtitle">Temperatura média</span></div>
       <div class="chart-wrap"><canvas id="chartCompare"></canvas></div>
     </div>
+  </div>
+</section>
+
+<section class="charts-section">
+  <div class="charts-grid-wide">
     <div class="chart-card">
       <div class="chart-header"><span class="chart-title">🌬️ Velocidade do Vento (m/s)</span></div>
       <div class="chart-wrap"><canvas id="chartWind"></canvas></div>
@@ -119,7 +130,8 @@
             <th>Dispositivo</th><th>Site</th><th>Cidade</th><th>UF</th>
             <th>T. Média (°C)</th><th>T. Max (°C)</th><th>T. Min (°C)</th>
             <th>UR (%)</th><th>Precip (mm)</th><th>ETo (mm)</th>
-            <th>Vento (m/s)</th><th>VPD (kPa)</th>
+            <th>Vento (m/s)</th><th>Dir. Vento</th><th>VPD (kPa)</th>
+            <th>SWDW (MJ/m²)</th><th>NDVI</th><th>Latitude</th><th>Longitude</th>
           </tr>
         </thead>
         <tbody id="stationsTableBody"></tbody>

@@ -54,7 +54,7 @@ async function fetchLiveData(startDate, endDate) {
   rawData = [];
 
 const fetchPromises = BR_STATIONS.map(async (station) => {
-    const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=200`;
+    const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=1000`;
     try {
       const res = await fetchWithTimeout(url, {
         headers: { 'Authorization': `Apikey ${API_KEY}` }
@@ -300,6 +300,8 @@ function updateKPIs() {
   document.getElementById('kpi-et-val').textContent     = fmt(avg(d,'et')) + ' mm/dia';
   document.getElementById('kpi-wind-val').textContent   = fmt(avg(d,'wind_speed')) + ' m/s';
   document.getElementById('kpi-vpd-val').textContent    = fmt(avg(d,'vpd')) + ' kPa';
+  document.getElementById('kpi-swdw-val').textContent   = fmt(avg(d,'swdw')) + ' MJ/m²';
+  document.getElementById('kpi-ndvi-val').textContent   = fmt(avg(d,'ndvi'),2);
 }
 
 /* ==========================================
@@ -346,7 +348,7 @@ function makeBarChart(id, labels, datasets) {
 function renderAll() {
   renderTempChart(); renderPrecipChart(); renderRHChart();
   renderETChart(); renderVPDChart(); renderCompareChart();
-  renderWindChart(); renderTable();
+  renderWindChart(); renderSWDWChart(); renderTable();
 }
 
 function renderTempChart() {
@@ -384,6 +386,12 @@ function renderVPDChart() {
     borderColor:'#facc15', backgroundColor:'rgba(250,204,21,0.1)', fill:true, tension:0.3, pointRadius:0 }], 'kPa');
 }
 
+function renderSWDWChart() {
+  const labels = getDateLabels(filteredData);
+  makeLineChart('chartSWDW', labels, [{ label:'Radiação Solar (MJ/m²)', data:aggregateByDate(filteredData,'swdw'),
+    borderColor:'#fb923c', backgroundColor:'rgba(251,146,60,0.1)', fill:true, tension:0.3, pointRadius:0 }], 'MJ/m²');
+}
+
 function renderCompareChart() {
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
   const labels   = stations.map(s => { const i = filteredData.find(r=>r.device===s); return `${s}\n${i.city}`; });
@@ -419,7 +427,11 @@ function renderTable() {
       <td>${s}</td><td>${info.site}</td><td>${info.city}</td><td>${info.state}</td>
       <td>${fmt(avg(d,'tair_mean'))}</td><td>${fmt(mx)}</td><td>${fmt(mn)}</td>
       <td>${fmt(avg(d,'rh_mean'),0)}</td><td>${fmt(sum(d,'precip'),1)}</td>
-      <td>${fmt(avg(d,'et'))}</td><td>${fmt(avg(d,'wind_speed'))}</td><td>${fmt(avg(d,'vpd'))}</td>`;
+      <td>${fmt(avg(d,'et'))}</td><td>${fmt(avg(d,'wind_speed'))}</td>
+      <td>${info.wind_dir || '—'}</td><td>${fmt(avg(d,'vpd'))}</td>
+      <td>${fmt(avg(d,'swdw'))}</td><td>${fmt(avg(d,'ndvi'),2)}</td>
+      <td>${info.lat ? Number(info.lat).toFixed(4) : '—'}</td>
+      <td>${info.lon ? Number(info.lon).toFixed(4) : '—'}</td>`;
     tbody.appendChild(row);
   });
 }
@@ -428,10 +440,10 @@ function renderTable() {
    BOOT
    ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Calcular intervalo padrão: últimos 60 dias
+  // Calcular intervalo padrão: últimos 90 dias
   const today = new Date();
   const start = new Date(today);
-  start.setDate(start.getDate() - 60);
+  start.setDate(start.getDate() - 90);
   const fmt8601 = d => d.toISOString().split('T')[0];
 
   document.getElementById('startDate').value = fmt8601(start);
