@@ -54,7 +54,7 @@ async function fetchLiveData(startDate, endDate) {
   rawData = [];
 
 const fetchPromises = BR_STATIONS.map(async (station) => {
-    const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=1000`;
+    const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=2000`;
     try {
       const res = await fetchWithTimeout(url, {
         headers: { 'Authorization': `Apikey ${API_KEY}` }
@@ -440,10 +440,10 @@ function renderTable() {
    BOOT
    ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Calcular intervalo padrão: últimos 90 dias
+  // Calcular intervalo padrão: últimos 48 meses (4 anos)
   const today = new Date();
   const start = new Date(today);
-  start.setDate(start.getDate() - 90);
+  start.setMonth(start.getMonth() - 48);
   const fmt8601 = d => d.toISOString().split('T')[0];
 
   document.getElementById('startDate').value = fmt8601(start);
