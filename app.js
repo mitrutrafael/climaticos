@@ -1,5 +1,5 @@
 ﻿/* =============================================
-   Estacoes Arable Brazil — app.js
+Agrometeologia Vylor — app.js
    Dados ao vivo via Arable Cloud API (CORS OK)
    Atualização automática a cada 30 minutos
    ============================================= */
@@ -10,7 +10,7 @@ const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
 const API_TIMEOUT_MS = 15000; // timeout por requisição à API
 
 const BR_STATIONS = [
-  { name:'D009893', site:'BO Fatima do Sul',    city:'Fatima do Sul',     state:'MS' },
+  { name:'D009893', site:'BO Fátima do Sul',   city:'Fátima do Sul',    state:'MS' },
   { name:'D009889', site:'BF Toledo Area 2',    city:'Toledo',             state:'PR' },
   { name:'D009881', site:'BH Indianopolis',      city:'Indianópolis',      state:'MG' },
   { name:'D006582', site:'BW Mogi Mirim',        city:'Mogi Mirim',        state:'SP' },
