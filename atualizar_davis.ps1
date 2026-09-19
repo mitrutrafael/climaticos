@@ -14,7 +14,7 @@
 
 [CmdletBinding()]
 param(
-  [string]$StartDate = '2026-07-01',
+  [string]$StartDate = ((Get-Date).AddDays(-30)).ToString('yyyy-MM-dd'),
   [string]$EndDate   = (Get-Date).ToString('yyyy-MM-dd'),
   [string]$OutFile   = 'dados_davis_brasil.csv'
 )
