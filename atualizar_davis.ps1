@@ -1,15 +1,14 @@
 ﻿# ============================================================
 # atualizar_davis.ps1
-# Baixa os dados diÃ¡rios das estaÃ§Ãµes Davis (WeatherLink v2)
-# e gera dados_davis_brasil.csv no mesmo formato do Arable
-# (mÃ©trico: Â°C, ToMm, m/s, kPa).
+# Baixa os dados diários das estações Davis (WeatherLink v2)
+# e atualiza dados_davis_brasil.csv mantendo histórico + últimos 30 dias.
 #
 # Uso:
 #   $env:DAVIS_API_KEY   = "<sua chave>"
 #   $env:DAVIS_API_SECRET = "<seu segredo>"
 #   powershell -ExecutionPolicy Bypass -File atualizar_davis.ps1
 #
-# O segredo NÃƒO deve ser commitado no repositÃ³rio.
+# O segredo NÃO deve ser commitado no repositório.
 # ============================================================
 
 [CmdletBinding()]
@@ -25,12 +24,12 @@ $ProgressPreference = 'SilentlyContinue'
 $API_KEY   = $env:DAVIS_API_KEY
 $API_SECRET = $env:DAVIS_API_SECRET
 if (-not $API_KEY -or -not $API_SECRET) {
-  Write-Error 'Defina as variÃ¡veis de ambiente DAVIS_API_KEY e DAVIS_API_SECRET antes de rodar.'
+  Write-Error 'Defina as variáveis de ambiente DAVIS_API_KEY e DAVIS_API_SECRET antes de rodar.'
 }
 
 $BASE = 'https://api.weatherlink.com/v2'
 
-# EstaÃ§Ãµes Davis no Brasil com histÃ³rico (assinatura Pro)
+# Estaçõe Davis no Brasil com histórico (assinatura Pro)
 $STATIONS = @(
   @{ id = 13917; device = 'DV13917'; site = 'Corteva Passo Fundo';  city = 'Passo Fundo';  state = 'RS'; lat = -28.12846;  lon = -52.30285  },
   @{ id = 16450; device = 'DV16450'; site = 'Corteva Guarapuava';   city = 'Guarapuava';   state = 'PR'; lat = -25.58853;  lon = -51.49284  },
@@ -76,9 +75,21 @@ function Avg($arr) {
   return ($arr | Measure-Object -Average).Average
 }
 
+# --- Carregar histórico existente ---
+$existingRows = @{}
+if (Test-Path $OutFile) {
+  Write-Host "Carregando histórico existente de $OutFile ..."
+  $existing = Import-Csv -Path $OutFile -Encoding UTF8
+  foreach ($row in $existing) {
+    $key = "$($row.device)|$($row.date)"
+    $existingRows[$key] = $row
+  }
+  Write-Host "  -> $($existing.Count) registros históricos carregados"
+}
+
 Write-Host "Baixando dados Davis de $StartDate ate $EndDate ..."
 
-$rows = [System.Collections.Generic.List[object]]::new()
+$newRows = [System.Collections.Generic.List[object]]::new()
 $start = [datetime]::ParseExact($StartDate, 'yyyy-MM-dd', $null)
 $end   = [datetime]::ParseExact($EndDate, 'yyyy-MM-dd', $null)
 
@@ -129,7 +140,7 @@ foreach ($st in $STATIONS) {
     $swdw   = Round1 (Avg ($list | ForEach-Object { $_.solar_rad_avg }))
     $vpd    = Calc-Vpd (Avg ($list | ForEach-Object { ToDegC $_.temp_out })) (Avg ($list | ForEach-Object { $_.hum_out }))
 
-    $rows.Add([pscustomobject]@{
+    $newRows.Add([pscustomobject]@{
       device      = $st.device
       site        = $st.site
       city        = $st.city
@@ -152,5 +163,26 @@ foreach ($st in $STATIONS) {
   }
 }
 
-$rows | Export-Csv -Path $OutFile -NoTypeInformation -Encoding UTF8
-Write-Host "Pronto! $($rows.Count) registros gravados em $OutFile"
+# --- Merge: histórico antigo + novos dados (últimos 30 dias) ---
+$cutoffDate = [datetime]::ParseExact($StartDate, 'yyyy-MM-dd', $null)
+$finalRows = [System.Collections.Generic.List[object]]::new()
+
+# Manter histórico anterior ao período de atualização
+foreach ($key in $existingRows.Keys) {
+  $row = $existingRows[$key]
+  $rowDate = [datetime]::ParseExact($row.date, 'yyyy-MM-dd', $null)
+  if ($rowDate -lt $cutoffDate) {
+    $finalRows.Add($row)
+  }
+}
+
+# Adicionar/atualizar últimos 30 dias
+foreach ($row in $newRows) {
+  $finalRows.Add($row)
+}
+
+# Ordenar por device + date
+$finalRows = $finalRows | Sort-Object device, date
+
+$finalRows | Export-Csv -Path $OutFile -NoTypeInformation -Encoding UTF8
+Write-Host "Pronto! $($finalRows.Count) registros gravados em $OutFile (histórico preservado + últimos 30 dias atualizados)"
