@@ -10,8 +10,9 @@ permissions:
 
 jobs:
   atualizar:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     env:
+      ARABLE_API_KEY: ${{ secrets.ARABLE_API_KEY }}
       DAVIS_API_KEY: ${{ secrets.DAVIS_API_KEY }}
       DAVIS_API_SECRET: ${{ secrets.DAVIS_API_SECRET }}
 
@@ -22,29 +23,34 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Configurar Git
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
 
-      - name: Executar script de atualização Davis
-        shell: pwsh
+      - name: Instalar dependências
         run: |
-          $ErrorActionPreference = 'Stop'
-          .\atualizar_davis.ps1
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Executar pipeline ETL (últimos 30 dias)
+        run: python main.py --days 30 --log-level INFO
 
       - name: Verificar mudanças
         id: changes
         run: |
-          if (git status --porcelain | Select-String "dados_davis_brasil\.csv") {
-            echo "changed=true" >> $env:GITHUB_OUTPUT
-          } else {
-            echo "changed=false" >> $env:GITHUB_OUTPUT
-          }
+          if git status --porcelain | grep -qE "dados_(climaticos|davis)_brasil\.csv"; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Commit e push se houver mudanças
         if: steps.changes.outputs.changed == 'true'
         run: |
-          git add dados_davis_brasil.csv
-          git commit -m "chore: atualiza dados Davis $(Get-Date -Format 'yyyy-MM-dd')"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dados_climaticos_brasil.csv dados_davis_brasil.csv
+          git commit -m "chore: atualiza dados climáticos $(date +%Y-%m-%d)"
           git push

@@ -8,11 +8,66 @@
 
 ## 📋 Sobre o Projeto
 
-O **Agrometerologia Vylor** é uma plataforma de visualização e análise de dados climáticos coletados por estações físicas **Arable** e **Davis** distribuídas pelo Brasil. O sistema consome a **Arable Cloud API** e a **WeatherLink v2 API** e apresenta os dados de forma interativa para suporte à tomada de decisões agronômicas.
+O **Agrometerologia Vylor** é uma plataforma de visualização e análise de dados climáticos coletados por estações físicas **Arable** e **Davis** distribuídas pelo Brasil. O sistema consome a **Arable Cloud API** e a **WeatherLink v2 API**, consolida os dados em CSVs e publica um dashboard estático (GitHub Pages / Netlify).
+
+---
+
+## 🗄️ Arquitetura (ETL em Python)
+
+```
+        ┌─────────────────┐        ┌──────────────────┐
+        │  Arable Cloud   │        │ WeatherLink v2    │
+        │  API v2         │        │ (Davis)           │
+        └────────┬────────┘        └─────────┬─────────┘
+                 │  (ARABLE_API_KEY)         │ (DAVIS_API_KEY + SECRET)
+                 ▼                           ▼
+        ┌──────────────── cloning extract ───────────────┐
+        │  src/climaticos/extract/arable.py             │
+        │  src/climaticos/extract/davis.py              │
+        └──────────────────────┬─────────────────────────┘
+                               ▼
+        ┌──────────────── transform ────────────────────┐
+        │  units.py  → °F→°C, in→mm, mph→m/s, VPD         │
+        │  daily.py  → agregação diária por estação      │
+        └──────────────────────┬─────────────────────────┘
+                               ▼
+        ┌────────────────── load ───────────────────────┐
+        │  csv_loader.py → upsert (history + janela)     │
+        │                  escrita atômica              │
+        └──────────────────────┬─────────────────────────┘
+                               ▼
+        ┌────────── dados_climaticos_brasil.csv ────────┐
+        │          dados_davis_brasil.csv               │
+        └──────────────────────┬────────────────────────┘
+                               ▼
+        ┌──────────────── Dashboard (estático) ─────────┐
+        │  index.html + app.js + style.css → CSVs        │
+        └────────────────────────────────────────────────┘
+```
+
+O pipeline segue o padrão **extract → transform → load**, com os CSVs servindo de
+"contrato" entre a coleta (Python) e a visualização (browser). Nenhuma chave de API
+é exposta no frontend.
+
+### Módulos
+
+| Módulo | Responsabilidade |
+|--------|------------------|
+| `src/climaticos/config.py` | Configuração via variáveis de ambiente + catálogo de estações |
+| `src/climaticos/extract/base.py` | Cliente HTTP resiliente (retry + backoff exponencial + timeout) |
+| `src/climaticos/extract/arable.py` | Extração Arable Cloud (dados diários) |
+| `src/climaticos/extract/davis.py` | Extração WeatherLink v2 (fatias diárias por estação) |
+| `src/climaticos/transform/units.py` | Conversões de unidades e cálculo de VPD |
+| `src/climaticos/transform/daily.py` | Agregação diária dos registros brutos Davis |
+| `src/climaticos/load/csv_loader.py` | Upsert com histórico + escrita atômica |
+| `src/climaticos/pipeline.py` | Orquestração do fluxo completo |
+| `main.py` | CLI de ponto de entrada |
 
 ---
 
 ## 🏭 Estações Monitoradas (Brasil)
+
+### Arable
 
 | Dispositivo | Site | Cidade | UF | Status |
 |-------------|------|--------|----|--------|
@@ -36,8 +91,8 @@ O **Agrometerologia Vylor** é uma plataforma de visualização e análise de da
 | DV18648 | Corteva Ponta Grossa | Ponta Grossa | PR | ✅ Ativa |
 | DV59252 | Corteva Toledo | Toledo | PR | ✅ Ativa |
 
-> As estações Davis são incluídas no dashboard a partir do CSV `dados_davis_brasil.csv`,
-> gerado pelo script `atualizar_davis.ps1` (WeatherLink v2 API). Requer assinatura **Pro** para histórico.
+> O catálogo de estações fica em `src/climaticos/config.py`. Para incluir/excluir uma
+> estação, edite apenas esse arquivo.
 
 ---
 
@@ -59,96 +114,89 @@ O **Agrometerologia Vylor** é uma plataforma de visualização e análise de da
 
 ---
 
-## 🗂️ Estrutura do Projeto
+## 🚀 Como Usar (Pipeline ETL)
 
-```
-climaticos/
-├── index.html                    # Dashboard principal
-├── style.css                     # Estilo premium (dark mode)
-├── app.js                        # Lógica do dashboard (Chart.js + PapaParse)
-├── dados_climaticos_brasil.csv   # Dados Arable (Jul–Set 2026 · 632 registros)
-├── dados_davis_brasil.csv        # Dados Davis/WeatherLink (Jul–Set 2026 · 300 registros)
-├── atualizar_davis.ps1           # Script para baixar/atualizar dados Davis (requer chave API)
-├── analise_climatica_arable.R    # Script R de análise estatística
-├── RELATORIO_CLIMATICO.md        # Relatório técnico
-└── README.md                     # Este arquivo
-```
-
----
-
-## 🚀 Como Usar
-
-### Dashboard Web
-
-```bash
-# Sirva o diretório como servidor HTTP local
-cd c:\Antigravity\climaticos
-
-# Python (recomendado):
-python -m http.server 8080
-
-# Ou Node.js (npx):
-npx -y serve .
-```
-
-Acesse: [http://localhost:8080](http://localhost:8080)
-
-> ⚠️ O dashboard **precisa ser servido via HTTP** (não funciona com `file://`) para carregar o CSV via fetch.
-
-### Script R
-
-```r
-# No RStudio ou terminal R, execute:
-setwd("c:/Antigravity/climaticos")
-source("analise_climatica_arable.R")
-```
-
----
-
-## 📡 Atualizar Dados Davis (WeatherLink)
+### 1. Configurar credenciais
 
 ```powershell
-$env:DAVIS_API_KEY   = "sua chave v2"
-$env:DAVIS_API_SECRET = "seu segredo v2"
-powershell -ExecutionPolicy Bypass -File atualizar_davis.ps1 -StartDate 2026-07-01 -EndDate 2026-09-17
+$env:ARABLE_API_KEY   = "sua chave"
+$env:DAVIS_API_KEY    = "sua chave"
+$env:DAVIS_API_SECRET = "seu segredo"
 ```
 
-> ⚠️ O segredo da API **não deve** ser commitado no repositório. Após gerar o CSV, faça `git add` + `git push` para atualizar o dashboard no GitHub Pages.
+Ou copie `.env.example` para `.env` e preencha (o script não lê `.env` por padrão;
+use as variáveis de ambiente do sistema ou do CI).
+
+### 2. Instalar dependências
+
+```bash
+pip install -r requirements.txt
+```
+
+### 3. Executar
+
+```bash
+# Últimos 30 dias (padrão, preserva o histórico)
+python main.py
+
+# Período explícito
+python main.py --start 2026-07-01 --end 2026-09-17
+
+# Apenas uma fonte
+python main.py --arable-only
+python main.py --davis-only
+
+# Log detalhado
+python main.py --log-level DEBUG
+```
+
+> O pipeline **preserva o histórico** existente: baixa apenas a janela solicitada
+> (padrão: últimos 30 dias) e faz *upsert* por `device + date`. Para rebaixar todo o
+> histórico, delete o CSV e rode com o período completo.
+
+---
+
+## 🤖 Automação (GitHub Actions)
+
+| Workflow | Gatilho | Ação |
+|----------|---------|------|
+| `atualizar-dados.yml` | 06:00 UTC diário + manual | Roda o ETL e faz commit/push dos CSVs |
+| `deploy-pages.yml` | push no `main` | Publica o site no GitHub Pages |
+| `ci.yml` | push/PR | Lint (ruff) + testes (pytest) |
+
+### Secrets obrigatórios no GitHub
+
+- `ARABLE_API_KEY`
+- `DAVIS_API_KEY`
+- `DAVIS_API_SECRET`
+
+Configure em **Settings → Secrets and variables → Actions**.
+
+---
+
+## 🧪 Testes
+
+```bash
+pip install -e ".[dev]"
+ruff check src tests main.py
+pytest
+```
+
+---
+
+## 🔑 APIs
+
+- **Arable Cloud v2**: `https://api.arable.cloud/api/v2/` · `Authorization: Apikey <chave>`
+- **WeatherLink v2**: `https://api.weatherlink.com/v2/` · chave via query + `X-Api-Secret`
 
 ---
 
 ## 📈 Funcionalidades do Dashboard
 
 - **Filtros dinâmicos**: por estação, estado (UF) e período de datas
-- **KPIs em tempo real**: Temperatura, Umidade, Precipitação, ETo, Vento, VPD
-- **7 gráficos interativos**:
-  - Temperatura diária (Máx/Média/Mín)
-  - Precipitação diária (barras)
-  - Umidade Relativa (série temporal)
-  - Evapotranspiração ETo (série temporal)
-  - VPD — Déficit de Pressão de Vapor
-  - Comparativo de temperatura por estação
-  - Velocidade do vento por estação
+- **KPIs**: Temperatura, Umidade, Precipitação, ETo, Vento, VPD, Radiação, NDVI
+- **7 gráficos interativos** (temperatura, precipitação, UR, ETo, VPD, radiação, vento)
 - **Tabela resumo**: estatísticas agregadas por estação
-
----
-
-## 🔑 API Arable
-
-- **Endpoint base**: `https://api.arable.cloud/api/v2/`
-- **Autenticação**: `Authorization: Apikey <api_key>`
-- **Dados diários**: `/data/daily?device=<ID>&start_time=<DATE>&end_time=<DATE>`
-- **Lista de dispositivos**: `/devices?limit=100&page=<N>`
-- **Esquema de dados**: `/schemas/daily`
-
----
-
-## 📅 Período dos Dados
-
-- **Início**: 2026-07-01
-- **Fim**: 2026-09-17
-- **Total de registros**: 632
-- **Resolução**: Diária (média/agregado 24h)
 
 ---
 
@@ -156,12 +204,13 @@ powershell -ExecutionPolicy Bypass -File atualizar_davis.ps1 -StartDate 2026-07-
 
 | Tecnologia | Uso |
 |-----------|-----|
+| Python 3.11+ | Pipeline ETL (requests + pandas) |
 | HTML5 + CSS3 | Dashboard (estrutura e estilo) |
 | JavaScript | Lógica de filtros e gráficos |
-| [Chart.js 4.4](https://chartjs.org) | Visualizações interativas |
-| [PapaParse 5.4](https://papaparse.com) | Parse de CSV no browser |
-| R + ggplot2 | Análise estatística |
-| [Arable Cloud API v2](https://api.arable.cloud) | Dados climáticos |
+| Chart.js 4.4 | Visualizações interativas |
+| PapaParse 5.4 | Parse de CSV no browser |
+| GitHub Actions | Automação, testes e deploy |
+| Netlify / GitHub Pages | Hospedagem estática |
 
 ---
 

@@ -1,26 +1,12 @@
 ﻿/* =============================================
 Agrometerologia Vylor — app.js
-   Dados ao vivo via Arable Cloud API (CORS OK)
-   Atualização automática a cada 30 minutos
+   Dashboard consome apenas os CSVs consolidados
+   pelo pipeline ETL (GitHub Actions diário).
+   Nenhuma chave de API é exposta no browser.
    ============================================= */
 
-const API_KEY  = 'fe8e9cf2-b5b8-4f0b-90e9-1163ada8a2f7';
-const API_BASE = 'https://api.arable.cloud/api/v2';
-const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutos
-const API_TIMEOUT_MS = 15000; // timeout por requisição à API
-
-const BR_STATIONS = [
-  { name:'D009893', site:'BO Fátima do Sul',   city:'Fátima do Sul',    state:'MS' },
-  { name:'D009889', site:'BF Toledo Area 2',    city:'Toledo',             state:'PR' },
-  { name:'D009881', site:'BH Indianopolis',      city:'Indianópolis',      state:'MG' },
-  { name:'D006582', site:'BW Mogi Mirim',        city:'Mogi Mirim',        state:'SP' },
-  { name:'D006917', site:'BC Planaltina',        city:'Planaltina',        state:'DF' },
-  { name:'D006926', site:'PC Sao Luiz Gonzaga',  city:'São Luiz Gonzaga',  state:'RS' },
-  { name:'D006642', site:'BL Ponta Grossa',      city:'Ponta Grossa',      state:'PR' },
-  { name:'D009895', site:'PC Cruz Alta',         city:'Cruz Alta',         state:'RS' },
-  { name:'D009878', site:'BM Sorriso',           city:'Sorriso',           state:'MT' },
-  { name:'D009876', site:'Corteva GPB BL',       city:'Ponta Grossa',      state:'PR' },
-];
+const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // re-lê os CSVs a cada 30 min
+const CSV_SOURCES = ['dados_climaticos_brasil.csv', 'dados_davis_brasil.csv'];
 
 const PALETTE = ['#38bdf8','#818cf8','#34d399','#fb923c','#f472b6','#facc15','#a78bfa','#22d3ee'];
 const CHART_DEFAULTS = {
@@ -33,87 +19,18 @@ const CHART_DEFAULTS = {
 };
 
 let rawData = [];
-let csvData = [];
 let filteredData = [];
 let charts = {};
 let refreshTimer = null;
 let lastUpdate = null;
-
-function fetchWithTimeout(url, options = {}, ms = API_TIMEOUT_MS) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), ms);
-  return fetch(url, { ...options, signal: controller.signal })
-    .finally(() => clearTimeout(timer));
-}
+let filtersInitialized = false;
 
 /* ==========================================
-   FETCH LIVE DATA — Arable API
+   CARGA DE DADOS — CSVs consolidados
    ========================================== */
-async function fetchLiveData(startDate, endDate) {
-  setLoadingState(true, 'Buscando dados ao vivo...');
-  rawData = [];
-
-const fetchPromises = BR_STATIONS.map(async (station) => {
-    const url = `${API_BASE}/data/daily?device=${station.name}&start_time=${startDate}&end_time=${endDate}&limit=2000`;
-    try {
-      const res = await fetchWithTimeout(url, {
-        headers: { 'Authorization': `Apikey ${API_KEY}` }
-      });
-      if (!res.ok) return;
-      const items = await res.json();
-      if (!Array.isArray(items) || items.length === 0) return;
-
-      return items.map(item => ({
-        device:     station.name,
-        site:       station.site,
-        city:       station.city,
-        state:      station.state,
-        date:       (item.time || '').split('T')[0],
-        tair_mean:  item.meant    ?? null,
-        tair_max:   item.maxt    ?? null,
-        tair_min:   item.mint    ?? null,
-        rh_mean:    item.mean_rh != null ? Math.round(item.mean_rh * 1000) / 10 : null,
-        precip:     item.precip  ?? null,
-        et:         item.et      ?? null,
-        wind_speed: item.wind_speed ?? null,
-        wind_dir:   item.wind_direction ?? null,
-        vpd:        item.vpd     ?? null,
-        swdw:       item.swdw    ?? null,
-        ndvi:       item.ndvi    ?? null,
-        lat:        item.lat     ?? null,
-        lon:        item.long    ?? null,
-      }));
-    } catch (e) {
-      console.warn(`Erro ao buscar ${station.name}:`, e);
-      return [];
-    }
-  });
-
-const results = await Promise.all(fetchPromises);
-  results.forEach(rows => { if (rows) rawData.push(...rows); });
-
-  if (rawData.length === 0) {
-    if (csvData.length) {
-      // API indisponível/muitos dados: mantém a base local já carregada
-      rawData = csvData;
-      lastUpdate = null;
-      setLoadingState(false);
-      updateLastUpdateBadge();
-      showToast('📁 API indisponível — usando dados da base local.');
-      initFilters();
-      applyFilters();
-      return;
-    }
-    // Sem API e sem CSV: tenta carregar o CSV local
-    await loadFromCSV();
-    return;
-  }
-
-  lastUpdate = new Date();
-  setLoadingState(false);
-  updateLastUpdateBadge();
-  initFilters();
-  applyFilters();
+function cachedUrl(file) {
+  // Quebra o cache HTTP para buscar sempre a versão mais recente do CSV
+  return file + '?t=' + encodeURIComponent(new Date().toISOString());
 }
 
 function parseCSV(url) {
@@ -126,26 +43,33 @@ function parseCSV(url) {
   });
 }
 
+function normalize(row) {
+  // Uniformiza tipos numéricos vindos do PapaParse (strings em alguns casos)
+  ['tair_mean','tair_max','tair_min','rh_mean','precip','et','wind_speed','vpd','swdw','ndvi','lat','lon']
+    .forEach(k => { if (row[k] !== '' && row[k] != null) { const n = Number(row[k]); row[k] = isNaN(n) ? null : n; } });
+  return row;
+}
+
 async function loadFromCSV() {
-  console.warn('API falhou, tentando CSV local...');
-  setLoadingState(true, 'Carregando CSV local...');
+  setLoadingState(true, 'Carregando dados consolidados...');
   try {
-    const [arable, davis] = await Promise.all([
-      parseCSV('dados_climaticos_brasil.csv'),
-      parseCSV('dados_davis_brasil.csv')
-    ]);
-    csvData = [...arable, ...davis].filter(r => r.device && r.date);
-    rawData = csvData;
-    lastUpdate = null; // indica dados locais
+    const [arable, davis] = await Promise.all(
+      CSV_SOURCES.map(source => parseCSV(cachedUrl(source)).then(rows => rows.map(normalize)))
+    );
+    rawData = [...arable, ...davis].filter(r => r.device && r.date);
+    lastUpdate = new Date();
     setLoadingState(false);
     updateLastUpdateBadge();
     initFilters();
     applyFilters();
+    showToast('📊 Dados carregados do pipeline ETL.');
+    if (!rawData.length) throw new Error('CSVs sem registros');
   } catch (e) {
+    console.error('Falha ao carregar CSVs:', e);
     const overlay = document.getElementById('loadingOverlay');
     if (overlay) {
       overlay.innerHTML =
-        '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Sem conexão com a API e sem CSV local.<br>Verifique sua conexão.</div></div>';
+        '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Não foi possível carregar os dados.<br>Verifique sua conexão ou execute o pipeline ETL.</div></div>';
     }
     setLoadingState(false);
   }
@@ -167,7 +91,8 @@ function setLoadingState(loading, msg = '') {
         <div id="loadingMsg" style="font-size:0.9rem;color:#8b9ab0">${msg}</div>`;
       document.body.appendChild(overlay);
     } else {
-      document.getElementById('loadingMsg').textContent = msg;
+      const msgEl = document.getElementById('loadingMsg');
+      if (msgEl) msgEl.textContent = msg;
     }
   } else {
     if (overlay) overlay.remove();
@@ -179,22 +104,20 @@ function updateLastUpdateBadge() {
   if (!badge) return;
   if (lastUpdate) {
     badge.textContent = '↻ ' + lastUpdate.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
-    badge.title = 'Última atualização: ' + lastUpdate.toLocaleString('pt-BR');
+    badge.title = 'Última atualização (CSVs): ' + lastUpdate.toLocaleString('pt-BR');
     badge.style.borderColor = 'var(--accent3)';
     badge.style.color = 'var(--accent3)';
   } else {
-    badge.textContent = '📁 Dados locais';
-    badge.style.borderColor = 'var(--accent4)';
-    badge.style.color = 'var(--accent4)';
+    badge.textContent = '—';
   }
 }
 
 function scheduleAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
-    const startDate = document.getElementById('startDate').value;
-    const endDate   = document.getElementById('endDate').value;
-    fetchLiveData(startDate, endDate);
+    // Filtros são reinicializados para capturar novas estações/datas
+    filtersInitialized = false;
+    loadFromCSV();
     showToast('🔄 Dados atualizados automaticamente!');
   }, REFRESH_INTERVAL_MS);
 }
@@ -215,7 +138,10 @@ function showToast(msg) {
 /* ==========================================
    FILTERS
    ========================================== */
-let filtersInitialized = false;
+function fillOption(select, value) {
+  const exists = [...select.options].some(o => o.value === value);
+  if (!exists) select.add(new Option(value, value));
+}
 
 function initFilters() {
   if (filtersInitialized) return;
@@ -226,17 +152,15 @@ function initFilters() {
   const dates    = rawData.map(r => r.date).filter(Boolean).sort();
 
   const stSel = document.getElementById('stationFilter');
-  const existingDevices = [...stSel.options].map(o => o.value);
   stations.forEach(s => {
-    if (!existingDevices.includes(s)) {
-      const label = rawData.find(r => r.device === s);
-      stSel.add(new Option(`${s} · ${label.city}`, s));
-    }
+    const info = rawData.find(r => r.device === s);
+    const label = info ? `${s} · ${info.city}` : s;
+    fillOption(stSel, label);
+    stSel.options[stSel.options.length - 1].value = s;
   });
 
   const statesSel = document.getElementById('stateFilter');
-  const existingStates = [...statesSel.options].map(o => o.value);
-  states.forEach(s => { if (!existingStates.includes(s)) statesSel.add(new Option(s, s)); });
+  states.forEach(s => fillOption(statesSel, s));
 
   if (!document.getElementById('startDate').value && dates.length) {
     document.getElementById('startDate').value = dates[0];
@@ -252,10 +176,8 @@ function initFilters() {
     applyFilters();
   });
   document.getElementById('refreshBtn').addEventListener('click', () => {
-    const s = document.getElementById('startDate').value;
-    const e = document.getElementById('endDate').value;
     filtersInitialized = false;
-    fetchLiveData(s, e);
+    loadFromCSV();
     showToast('🔄 Buscando dados mais recentes...');
   });
 }
@@ -440,7 +362,7 @@ function renderTable() {
    BOOT
    ========================================== */
 document.addEventListener('DOMContentLoaded', () => {
-  // Calcular intervalo padrão: últimos 48 meses (4 anos)
+  // Intervalo padrão: últimos 48 meses (4 anos)
   const today = new Date();
   const start = new Date(today);
   start.setMonth(start.getMonth() - 48);
@@ -449,14 +371,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('startDate').value = fmt8601(start);
   document.getElementById('endDate').value   = fmt8601(today);
 
-  // 1) Carrega a base local primeiro (rápido e confiável)
-  loadFromCSV().then(() => {
-    // 2) Tenta atualizar com a API ao vivo em segundo plano
-    const s = document.getElementById('startDate').value;
-    const e = document.getElementById('endDate').value;
-    fetchLiveData(s, e);
-  });
-
+  loadFromCSV();
   scheduleAutoRefresh();
 });
 

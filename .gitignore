@@ -8,6 +8,22 @@ grafico_*.png
 resumo_por_estacao.csv
 correlacao_variaveis.csv
 
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# Segredos e ambiente
+.env
+.env.local
+
 # Sistema
 Thumbs.db
 Desktop.ini
