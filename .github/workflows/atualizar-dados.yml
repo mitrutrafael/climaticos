@@ -1,0 +1,50 @@
+name: Atualizar Dados Climáticos
+
+on:
+  schedule:
+    - cron: '0 6 * * *'  # Diariamente às 06:00 UTC (03:00 BRT)
+  workflow_dispatch:     # Permite execução manual
+
+permissions:
+  contents: write
+
+jobs:
+  atualizar:
+    runs-on: windows-latest
+    env:
+      DAVIS_API_KEY: ${{ secrets.DAVIS_API_KEY }}
+      DAVIS_API_SECRET: ${{ secrets.DAVIS_API_SECRET }}
+
+    steps:
+      - name: Checkout repositório
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Executar script de atualização Davis
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          .\atualizar_davis.ps1 -StartDate '2026-07-01'
+
+      - name: Verificar mudanças
+        id: changes
+        run: |
+          if (git status --porcelain | Select-String "dados_davis_brasil\.csv") {
+            echo "changed=true" >> $env:GITHUB_OUTPUT
+          } else {
+            echo "changed=false" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Commit e push se houver mudanças
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git add dados_davis_brasil.csv
+          git commit -m "chore: atualiza dados Davis $(Get-Date -Format 'yyyy-MM-dd')"
+          git push
