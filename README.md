@@ -1,4 +1,4 @@
-﻿# 🌤️ Agrometerologia Vylor — Projeto de Dados Climáticos
+# 🌤️ Agrometerologia Vylor — Projeto de Dados Climáticos
 
 > Dashboard interativo e análise estatística dos dados das estações **Arable** e **Davis** no Brasil.
 
@@ -111,6 +111,16 @@ O pipeline segue o padrão **extract → transform → load**, com os CSVs servi
 | `vpd` | kPa | Déficit de Pressão de Vapor |
 | `swdw` | W/m² | Radiação solar incidente |
 | `ndvi` | — | Índice de Vegetação por Diferença Normalizada |
+| `gdu` | GDU | Graus-Dia de Desenvolvimento: $\max(0, \frac{T_{max} + T_{min}}{2} - T_{base})$ |
+
+### 🌱 Graus-Dia de Desenvolvimento (GDU)
+
+O dashboard calcula dinamicamente o GDU acumulado e a média diária no período filtrado com base na temperatura basal da cultura selecionada:
+- **10°C** *(padrão)*: Milho, Sorgo e Soja
+- **5°C**: Trigo e cereais de inverno
+- **8°C**: Girassol
+- **12°C**: Feijão e Arroz
+- **15°C**: Cana-de-açúcar e Algodão
 
 ---
 

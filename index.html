@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
@@ -49,6 +49,16 @@
       <label for="endDate">Até</label>
       <input type="date" id="endDate" />
     </div>
+    <div class="filter-group">
+      <label for="gduBase">T. Base GDU</label>
+      <select id="gduBase">
+        <option value="10" selected>10°C · Milho / Soja</option>
+        <option value="5">5°C · Trigo / Inverno</option>
+        <option value="12">12°C · Feijão / Arroz</option>
+        <option value="15">15°C · Cana / Algodão</option>
+        <option value="8">8°C · Girassol</option>
+      </select>
+    </div>
     <button class="btn-apply" id="applyFilter">Aplicar</button>
     <button class="btn-reset" id="resetFilter">Resetar</button>
     <button class="btn-refresh" id="refreshBtn" title="Buscar dados mais recentes agora">↻ Atualizar</button>
@@ -58,6 +68,7 @@
 <section class="kpi-section">
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-icon">🌡️</div><div class="kpi-body"><div class="kpi-label">Temp. Média</div><div class="kpi-value" id="kpi-temp-val">—</div><div class="kpi-sub" id="kpi-temp-range">—</div></div></div>
+    <div class="kpi-card" title="Graus-Dia de Desenvolvimento: GDU = max(0, ((Tmax + Tmin)/2) - Tbase)"><div class="kpi-icon">🌱</div><div class="kpi-body"><div class="kpi-label">GDU Acumulado</div><div class="kpi-value" id="kpi-gdu-val">—</div><div class="kpi-sub" id="kpi-gdu-sub">Base 10°C · Graus-Dia</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">💧</div><div class="kpi-body"><div class="kpi-label">Umidade Média</div><div class="kpi-value" id="kpi-rh-val">—</div><div class="kpi-sub">Umidade Relativa do Ar</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>
@@ -114,6 +125,10 @@
 <section class="charts-section">
   <div class="charts-grid-wide">
     <div class="chart-card">
+      <div class="chart-header"><span class="chart-title">🌱 Graus-Dia de Desenvolvimento (GDU)</span><span class="chart-subtitle">GDU Diário & Curva Acumulada</span></div>
+      <div class="chart-wrap"><canvas id="chartGDU"></canvas></div>
+    </div>
+    <div class="chart-card">
       <div class="chart-header"><span class="chart-title">🌬️ Velocidade do Vento (m/s)</span></div>
       <div class="chart-wrap"><canvas id="chartWind"></canvas></div>
     </div>
@@ -128,7 +143,7 @@
         <thead>
           <tr>
             <th>Dispositivo</th><th>Site</th><th>Cidade</th><th>UF</th>
-            <th>T. Média (°C)</th><th>T. Max (°C)</th><th>T. Min (°C)</th>
+            <th>T. Média (°C)</th><th>T. Max (°C)</th><th>T. Min (°C)</th><th>GDU Acum.</th>
             <th>UR (%)</th><th>Precip (mm)</th><th>ETo (mm)</th>
             <th>Vento (m/s)</th><th>Dir. Vento</th><th>VPD (kPa)</th>
             <th>SWDW (MJ/m²)</th><th>NDVI</th><th>Latitude</th><th>Longitude</th>

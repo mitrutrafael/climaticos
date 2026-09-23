@@ -14,14 +14,14 @@
 [CmdletBinding()]
 param(
   [string]$StartDate = ((Get-Date).AddDays(-30)).ToString('yyyy-MM-dd'),
-  [string]$EndDate   = (Get-Date).ToString('yyyy-MM-dd'),
-  [string]$OutFile   = 'dados_davis_brasil.csv'
+  [string]$EndDate = (Get-Date).ToString('yyyy-MM-dd'),
+  [string]$OutFile = 'dados_davis_brasil.csv'
 )
 
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
 
-$API_KEY   = $env:DAVIS_API_KEY
+$API_KEY = $env:DAVIS_API_KEY
 $API_SECRET = $env:DAVIS_API_SECRET
 if (-not $API_KEY -or -not $API_SECRET) {
   Write-Error 'Defina as variáveis de ambiente DAVIS_API_KEY e DAVIS_API_SECRET antes de rodar.'
@@ -31,10 +31,10 @@ $BASE = 'https://api.weatherlink.com/v2'
 
 # Estaçõe Davis no Brasil com histórico (assinatura Pro)
 $STATIONS = @(
-  @{ id = 13917; device = 'DV13917'; site = 'Corteva Passo Fundo';  city = 'Passo Fundo';  state = 'RS'; lat = -28.12846;  lon = -52.30285  },
-  @{ id = 16450; device = 'DV16450'; site = 'Corteva Guarapuava';   city = 'Guarapuava';   state = 'PR'; lat = -25.58853;  lon = -51.49284  },
-  @{ id = 18648; device = 'DV18648'; site = 'Corteva Ponta Grossa'; city = 'Ponta Grossa'; state = 'PR'; lat = -25.26254;  lon = -50.095493 },
-  @{ id = 59252; device = 'DV59252'; site = 'Corteva Toledo';       city = 'Toledo';       state = 'PR'; lat = -24.67118;  lon = -53.76017  }
+  @{ id = 13917; device = 'DV13917'; site = 'Corteva Passo Fundo'; city = 'Passo Fundo'; state = 'RS'; lat = -28.12846; lon = -52.30285 },
+  @{ id = 16450; device = 'DV16450'; site = 'Corteva Guarapuava'; city = 'Guarapuava'; state = 'PR'; lat = -25.58853; lon = -51.49284 },
+  @{ id = 18648; device = 'DV18648'; site = 'Corteva Ponta Grossa'; city = 'Ponta Grossa'; state = 'PR'; lat = -25.26254; lon = -50.095493 },
+  @{ id = 59252; device = 'DV59252'; site = 'Corteva Toledo'; city = 'Toledo'; state = 'PR'; lat = -24.67118; lon = -53.76017 }
 )
 
 function Get-Historic($stationId, $sinceEpoch, $endEpoch) {
@@ -43,7 +43,8 @@ function Get-Historic($stationId, $sinceEpoch, $endEpoch) {
   for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
       return Invoke-RestMethod -Uri $url -Headers $headers -Method Get
-    } catch {
+    }
+    catch {
       if ($attempt -eq 3) { throw }
       Start-Sleep -Seconds 1
     }
@@ -54,7 +55,7 @@ function To-Utc([long]$epoch) { return [datetimeoffset]::FromUnixTimeSeconds($ep
 
 function DegTo-Compass([double]$deg) {
   if ([double]::IsNaN($deg) -or $deg -lt 0) { return '' }
-  $dirs = @('N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW')
+  $dirs = @('N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW')
   $idx = [int][Math]::Floor((($deg % 360) + 11.25) / 22.5) % 16
   return $dirs[$idx]
 }
@@ -91,7 +92,7 @@ Write-Host "Baixando dados Davis de $StartDate ate $EndDate ..."
 
 $newRows = [System.Collections.Generic.List[object]]::new()
 $start = [datetime]::ParseExact($StartDate, 'yyyy-MM-dd', $null)
-$end   = [datetime]::ParseExact($EndDate, 'yyyy-MM-dd', $null)
+$end = [datetime]::ParseExact($EndDate, 'yyyy-MM-dd', $null)
 
 foreach ($st in $STATIONS) {
   Write-Host "  -> $($st.site) ($($st.state))"
@@ -110,7 +111,8 @@ foreach ($st in $STATIONS) {
           $records.Add($rec)
         }
       }
-    } catch {
+    }
+    catch {
       Write-Warning "Falha em $d para $($st.id): $($_.Exception.Message)"
     }
     $d = $chunkEnd
@@ -128,38 +130,38 @@ foreach ($st in $STATIONS) {
 
   foreach ($day in ($byDay.Keys | Sort-Object)) {
     $list = $byDay[$day]
-    $tC     = Round1 (Avg ($list | ForEach-Object { ToDegC $_.temp_out }))
-    $tMax   = Round1 (($list | ForEach-Object { ToDegC $_.temp_out_hi } | Measure-Object -Maximum).Maximum)
-    $tMin   = Round1 (($list | ForEach-Object { ToDegC $_.temp_out_lo } | Measure-Object -Minimum).Minimum)
-    $rh     = Round1 (Avg ($list | ForEach-Object { $_.hum_out }))
+    $tC = Round1 (Avg ($list | ForEach-Object { ToDegC $_.temp_out }))
+    $tMax = Round1 (($list | ForEach-Object { ToDegC $_.temp_out_hi } | Measure-Object -Maximum).Maximum)
+    $tMin = Round1 (($list | ForEach-Object { ToDegC $_.temp_out_lo } | Measure-Object -Minimum).Minimum)
+    $rh = Round1 (Avg ($list | ForEach-Object { $_.hum_out }))
     $precip = Round1 (($list | ForEach-Object { $_.rainfall_mm } | Measure-Object -Sum).Sum)
-    $et     = Round1 (($list | ForEach-Object { ToMm $_.et } | Measure-Object -Sum).Sum)
-    $wind   = Round1 (Avg ($list | ForEach-Object { ToMs $_.wind_speed_avg }))
+    $et = Round1 (($list | ForEach-Object { ToMm $_.et } | Measure-Object -Sum).Sum)
+    $wind = Round1 (Avg ($list | ForEach-Object { ToMs $_.wind_speed_avg }))
     $wdPrev = (0.0 + (($list | Where-Object { $null -ne $_.wind_dir_of_prevail } | Select-Object -First 1).wind_dir_of_prevail))
     if ($null -eq $wdPrev) { $wdPrev = '' } else { $wdPrev = DegTo-Compass $wdPrev }
-    $swdw   = Round1 (Avg ($list | ForEach-Object { $_.solar_rad_avg }))
-    $vpd    = Calc-Vpd (Avg ($list | ForEach-Object { ToDegC $_.temp_out })) (Avg ($list | ForEach-Object { $_.hum_out }))
+    $swdw = Round1 (Avg ($list | ForEach-Object { $_.solar_rad_avg }))
+    $vpd = Calc-Vpd (Avg ($list | ForEach-Object { ToDegC $_.temp_out })) (Avg ($list | ForEach-Object { $_.hum_out }))
 
     $newRows.Add([pscustomobject]@{
-      device      = $st.device
-      site        = $st.site
-      city        = $st.city
-      state       = $st.state
-      date        = $day
-      tair_mean   = $tC
-      tair_max    = $tMax
-      tair_min    = $tMin
-      rh_mean     = $rh
-      precip      = $precip
-      et          = $et
-      wind_speed  = $wind
-      wind_dir    = $wdPrev
-      vpd         = $vpd
-      swdw        = $swdw
-      ndvi        = $null
-      lat         = $st.lat
-      lon         = $st.lon
-    })
+        device     = $st.device
+        site       = $st.site
+        city       = $st.city
+        state      = $st.state
+        date       = $day
+        tair_mean  = $tC
+        tair_max   = $tMax
+        tair_min   = $tMin
+        rh_mean    = $rh
+        precip     = $precip
+        et         = $et
+        wind_speed = $wind
+        wind_dir   = $wdPrev
+        vpd        = $vpd
+        swdw       = $swdw
+        ndvi       = $null
+        lat        = $st.lat
+        lon        = $st.lon
+      })
   }
 }
 

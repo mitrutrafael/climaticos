@@ -1,4 +1,4 @@
-﻿/* =============================
+/* =============================
    Agrometerologia Vylor — style.css
    ============================= */
 
@@ -171,6 +171,7 @@ tbody tr:hover { background: rgba(56,189,248,0.04); }
 td { padding: 10px 12px; color: var(--text); white-space: nowrap; }
 td:first-child { font-weight: 700; color: var(--accent1); }
 td.inactive { color: var(--muted); }
+td strong { color: var(--accent3); font-weight: 700; }
 
 /* ---- FOOTER ---- */
 .footer {

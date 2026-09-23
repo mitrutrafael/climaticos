@@ -1,4 +1,4 @@
-﻿/* =============================================
+/* =============================================
 Agrometerologia Vylor — app.js
    Dashboard consome apenas os CSVs consolidados
    pelo pipeline ETL (GitHub Actions diário).
@@ -167,10 +167,20 @@ function initFilters() {
     document.getElementById('endDate').value   = dates[dates.length - 1];
   }
 
+  const gduBaseSel = document.getElementById('gduBase');
+  if (gduBaseSel) {
+    gduBaseSel.addEventListener('change', () => {
+      updateKPIs();
+      renderGDUChart();
+      renderTable();
+    });
+  }
+
   document.getElementById('applyFilter').addEventListener('click', applyFilters);
   document.getElementById('resetFilter').addEventListener('click', () => {
     stSel.value = 'all';
     statesSel.value = 'all';
+    if (gduBaseSel) gduBaseSel.value = '10';
     document.getElementById('startDate').value = dates[0];
     document.getElementById('endDate').value   = dates[dates.length - 1];
     applyFilters();
@@ -207,7 +217,24 @@ function avg(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null &&
 function sum(arr, key) { return arr.map(r => r[key]).filter(x => x != null && !isNaN(x)).reduce((a,b) => a+b, 0); }
 function maxVal(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null && !isNaN(x)); return v.length ? Math.max(...v) : null; }
 function minVal(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null && !isNaN(x)); return v.length ? Math.min(...v) : null; }
-function fmt(v, dec=1) { return v != null && !isNaN(v) ? Number(v).toFixed(dec) : '—'; }
+function fmt(v, dec=1) {
+  if (v == null || isNaN(v)) return '—';
+  return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+
+function getTBase() {
+  const el = document.getElementById('gduBase');
+  return el ? (parseFloat(el.value) || 10) : 10;
+}
+
+function calcRowGDU(row, tBase = 10) {
+  let tMean = row.tair_mean;
+  if (row.tair_max != null && row.tair_min != null) {
+    tMean = (row.tair_max + row.tair_min) / 2;
+  }
+  if (tMean == null || isNaN(tMean)) return null;
+  return Math.max(0, tMean - tBase);
+}
 
 function updateKPIs() {
   const d = filteredData;
@@ -224,6 +251,25 @@ function updateKPIs() {
   document.getElementById('kpi-vpd-val').textContent    = fmt(avg(d,'vpd')) + ' kPa';
   document.getElementById('kpi-swdw-val').textContent   = fmt(avg(d,'swdw')) + ' MJ/m²';
   document.getElementById('kpi-ndvi-val').textContent   = fmt(avg(d,'ndvi'),2);
+
+  // GDU (Graus-Dia de Desenvolvimento / Growing Degree Units)
+  const tBase = getTBase();
+  const dates = getDateLabels(d);
+  const dailyMeanGDUs = dates.map(dt => {
+    const dayRows = d.filter(r => r.date === dt);
+    const gdus = dayRows.map(r => calcRowGDU(r, tBase)).filter(v => v != null);
+    return gdus.length ? gdus.reduce((a,b) => a+b, 0) / gdus.length : 0;
+  });
+  const totalGDU = dailyMeanGDUs.reduce((a,b) => a+b, 0);
+  const avgGDU = dates.length ? totalGDU / dates.length : 0;
+  const isSingleStation = document.getElementById('stationFilter') && document.getElementById('stationFilter').value !== 'all';
+
+  const gduValEl = document.getElementById('kpi-gdu-val');
+  const gduSubEl = document.getElementById('kpi-gdu-sub');
+  if (gduValEl) gduValEl.textContent = fmt(totalGDU, 0) + ' GDU';
+  if (gduSubEl) {
+    gduSubEl.textContent = `Média: ${fmt(avgGDU, 1)}/dia · Base ${tBase}°C${isSingleStation ? '' : ' (Reg.)'}`;
+  }
 }
 
 /* ==========================================
@@ -270,7 +316,7 @@ function makeBarChart(id, labels, datasets) {
 function renderAll() {
   renderTempChart(); renderPrecipChart(); renderRHChart();
   renderETChart(); renderVPDChart(); renderCompareChart();
-  renderWindChart(); renderSWDWChart(); renderTable();
+  renderGDUChart(); renderWindChart(); renderSWDWChart(); renderTable();
 }
 
 function renderTempChart() {
@@ -323,6 +369,90 @@ function renderCompareChart() {
     borderColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1.5, borderRadius:6 }]);
 }
 
+function renderGDUChart() {
+  destroyChart('chartGDU');
+  const canvas = document.getElementById('chartGDU');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const labels = getDateLabels(filteredData);
+  const tBase = getTBase();
+
+  const daily = labels.map(d => {
+    const vals = filteredData.filter(r => r.date === d).map(r => calcRowGDU(r, tBase)).filter(x => x != null);
+    return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
+  });
+
+  let runningSum = 0;
+  const cumulative = daily.map(v => {
+    runningSum += (v || 0);
+    return Number(runningSum.toFixed(1));
+  });
+
+  charts['chartGDU'] = new Chart(ctx, {
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: `GDU Diário (Base ${tBase}°C)`,
+          data: daily.map(v => Number(v.toFixed(1))),
+          backgroundColor: 'rgba(56, 189, 248, 0.4)',
+          borderColor: '#38bdf8',
+          borderWidth: 1,
+          borderRadius: 2,
+          yAxisID: 'y'
+        },
+        {
+          type: 'line',
+          label: 'GDU Acumulado',
+          data: cumulative,
+          borderColor: '#34d399',
+          backgroundColor: 'rgba(52, 211, 153, 0.08)',
+          fill: true,
+          tension: 0.25,
+          pointRadius: 0,
+          borderWidth: 2,
+          yAxisID: 'y1'
+        }
+      ]
+    },
+    options: {
+      ...CHART_DEFAULTS,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        ...CHART_DEFAULTS.plugins,
+        tooltip: { mode: 'index', intersect: false }
+      },
+      scales: {
+        x: {
+          ...CHART_DEFAULTS.scales.x,
+          ticks: {
+            ...CHART_DEFAULTS.scales.x.ticks,
+            callback(v, i) {
+              const skip = Math.ceil(labels.length / 15);
+              return i % skip === 0 ? labels[i] : '';
+            }
+          }
+        },
+        y: {
+          type: 'linear',
+          position: 'left',
+          title: { display: true, text: 'GDU / dia', color: '#8b9ab0', font: { size: 10 } },
+          grid: { color: 'rgba(255,255,255,0.05)' },
+          ticks: { color: '#8b9ab0', font: { size: 10 } }
+        },
+        y1: {
+          type: 'linear',
+          position: 'right',
+          title: { display: true, text: 'GDU Acumulado', color: '#34d399', font: { size: 10 } },
+          grid: { drawOnChartArea: false },
+          ticks: { color: '#34d399', font: { size: 10 } }
+        }
+      }
+    }
+  });
+}
+
 function renderWindChart() {
   const labels   = getDateLabels(filteredData);
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
@@ -344,10 +474,13 @@ function renderTable() {
     const info = d[0];
     const mx = maxVal(d,'tair_max');
     const mn = minVal(d,'tair_min');
+    const tBase = getTBase();
+    const gduStation = d.map(r => calcRowGDU(r, tBase)).filter(v => v != null).reduce((a,b) => a+b, 0);
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${s}</td><td>${info.site}</td><td>${info.city}</td><td>${info.state}</td>
       <td>${fmt(avg(d,'tair_mean'))}</td><td>${fmt(mx)}</td><td>${fmt(mn)}</td>
+      <td><strong>${fmt(gduStation, 0)}</strong></td>
       <td>${fmt(avg(d,'rh_mean'),0)}</td><td>${fmt(sum(d,'precip'),1)}</td>
       <td>${fmt(avg(d,'et'))}</td><td>${fmt(avg(d,'wind_speed'))}</td>
       <td>${info.wind_dir || '—'}</td><td>${fmt(avg(d,'vpd'))}</td>
