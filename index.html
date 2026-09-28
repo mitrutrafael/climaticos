@@ -84,7 +84,20 @@
 <section class="kpi-section">
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-icon">🌡️</div><div class="kpi-body"><div class="kpi-label">Temp. Média</div><div class="kpi-value" id="kpi-temp-val">—</div><div class="kpi-sub" id="kpi-temp-range">—</div></div></div>
-    <div class="kpi-card" title="Graus-Dia de Desenvolvimento — Soma Térmica (Gilmore &amp; Rogers, 1958; DuPont Pioneer): GDD = ((Tmín. + Tmáx.) / 2) − Tbase, com Tmín. limitada a Tbase e Tmáx. limitada a Tteto. Para o milho: 50 °F (10 °C) a 86 °F (30 °C)."><div class="kpi-icon">🌱</div><div class="kpi-body"><div class="kpi-label">GDU Acumulado</div><div class="kpi-value kpi-value-sm" id="kpi-gdu-val">—</div><div class="kpi-sub" id="kpi-gdu-alt">—</div><div class="kpi-sub" id="kpi-gdu-sub">Base 10 °C · Teto 30 °C · Graus-Dia</div></div></div>
+    <div class="kpi-card kpi-card-gdu" title="Graus-Dia de Desenvolvimento (GDU / GDD) — Soma Térmica (Gilmore &amp; Rogers, 1958; DuPont Pioneer): GDD = ((Tmín. + Tmáx.) / 2) − Tbase, com Tmín. limitada a Tbase e Tmáx. limitada a Tteto. Para o milho: 50 °F (10 °C) a 86 °F (30 °C).">
+      <div class="kpi-icon kpi-icon-gdu">🌱</div>
+      <div class="kpi-body">
+        <div class="kpi-header-row">
+          <div class="kpi-label">GDU Acumulado</div>
+          <button type="button" class="kpi-alt-pill" id="kpi-gdu-alt" title="Clique para alternar escala (°C / °F)">—</button>
+        </div>
+        <div class="kpi-value-row">
+          <span class="kpi-value" id="kpi-gdu-val">—</span>
+          <span class="kpi-unit" id="kpi-gdu-unit">°C·dia</span>
+        </div>
+        <div class="kpi-sub" id="kpi-gdu-sub">Base 10 °C · Teto 30 °C · Graus-Dia</div>
+      </div>
+    </div>
     <div class="kpi-card"><div class="kpi-icon">💧</div><div class="kpi-body"><div class="kpi-label">Umidade Média</div><div class="kpi-value" id="kpi-rh-val">—</div><div class="kpi-sub">Umidade Relativa do Ar</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>

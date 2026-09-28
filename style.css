@@ -105,7 +105,7 @@ body {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 20px;
   display: flex; align-items: center; gap: 16px;
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
   position: relative; overflow: hidden;
 }
 .kpi-card::before {
@@ -115,12 +115,61 @@ body {
 }
 .kpi-card:hover { transform: translateY(-3px); box-shadow: var(--shadow); }
 .kpi-icon { font-size: 2rem; flex-shrink: 0; }
+.kpi-body { flex: 1; min-width: 0; }
+.kpi-header-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .kpi-label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+.kpi-value-row { display: flex; align-items: baseline; gap: 6px; margin: 2px 0; flex-wrap: wrap; }
 .kpi-value { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; margin: 2px 0;
   background: linear-gradient(90deg, #e8edf5, #38bdf8);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 .kpi-value-sm { font-size: 1.3rem; letter-spacing: -0.5px; }
-.kpi-sub { font-size: 0.72rem; color: var(--muted); }
+.kpi-unit { font-size: 0.85rem; font-weight: 600; color: var(--accent3); letter-spacing: -0.2px; }
+.kpi-sub { font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
+.gdu-sep { opacity: 0.4; margin: 0 4px; }
+
+/* ---- GDU CARD PERSONALIZADO ---- */
+.kpi-card-gdu {
+  border-color: rgba(52, 211, 153, 0.28);
+  background: linear-gradient(145deg, rgba(52, 211, 153, 0.06) 0%, rgba(17, 24, 39, 0.95) 100%);
+}
+.kpi-card-gdu::before {
+  background: linear-gradient(135deg, rgba(52, 211, 153, 0.08), transparent);
+}
+.kpi-card-gdu:hover {
+  border-color: rgba(52, 211, 153, 0.55);
+  box-shadow: 0 6px 26px rgba(52, 211, 153, 0.16);
+}
+.kpi-icon-gdu {
+  filter: drop-shadow(0 0 10px rgba(52, 211, 153, 0.45));
+}
+.kpi-card-gdu .kpi-value {
+  background: linear-gradient(90deg, #ffffff 10%, #34d399 90%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.kpi-alt-pill {
+  background: rgba(52, 211, 153, 0.12);
+  border: 1px solid rgba(52, 211, 153, 0.32);
+  color: var(--accent3);
+  font-family: inherit;
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  line-height: 1.2;
+}
+.kpi-alt-pill:hover {
+  background: rgba(52, 211, 153, 0.24);
+  border-color: var(--accent3);
+  transform: translateY(-1px) scale(1.03);
+  box-shadow: 0 2px 10px rgba(52, 211, 153, 0.25);
+}
+.kpi-alt-pill:active {
+  transform: translateY(0) scale(0.98);
+}
 
 /* ---- CHARTS SECTION ---- */
 .charts-section { padding: 20px 32px 0; }
