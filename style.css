@@ -119,6 +119,7 @@ body {
 .kpi-value { font-size: 1.8rem; font-weight: 800; letter-spacing: -1px; margin: 2px 0;
   background: linear-gradient(90deg, #e8edf5, #38bdf8);
   -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.kpi-value-sm { font-size: 1.3rem; letter-spacing: -0.5px; }
 .kpi-sub { font-size: 0.72rem; color: var(--muted); }
 
 /* ---- CHARTS SECTION ---- */

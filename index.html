@@ -52,11 +52,27 @@
     <div class="filter-group">
       <label for="gduBase">T. Base GDU</label>
       <select id="gduBase">
-        <option value="10" selected>10°C · Milho / Soja</option>
-        <option value="5">5°C · Trigo / Inverno</option>
-        <option value="12">12°C · Feijão / Arroz</option>
-        <option value="15">15°C · Cana / Algodão</option>
-        <option value="8">8°C · Girassol</option>
+        <option value="10" selected>10 °C · Milho / Soja</option>
+        <option value="5">5 °C · Trigo / Inverno</option>
+        <option value="12">12 °C · Feijão / Arroz</option>
+        <option value="15">15 °C · Cana / Algodão</option>
+        <option value="8">8 °C · Girassol</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="gduCap">T. Teto GDU</label>
+      <select id="gduCap" title="Temperatura máxima efetiva: acima dela há pouco ou nenhum crescimento (86 °F / 30 °C para o milho)">
+        <option value="30" selected>30 °C · Milho (DuPont)</option>
+        <option value="32">32 °C · Teto alto</option>
+        <option value="26">26 °C · Teto baixo</option>
+        <option value="none">Sem teto (clássico)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <label for="tempUnit">Unidade Temp.</label>
+      <select id="tempUnit">
+        <option value="C" selected>°C · Celsius</option>
+        <option value="F">°F · Fahrenheit</option>
       </select>
     </div>
     <button class="btn-apply" id="applyFilter">Aplicar</button>
@@ -68,7 +84,7 @@
 <section class="kpi-section">
   <div class="kpi-grid">
     <div class="kpi-card"><div class="kpi-icon">🌡️</div><div class="kpi-body"><div class="kpi-label">Temp. Média</div><div class="kpi-value" id="kpi-temp-val">—</div><div class="kpi-sub" id="kpi-temp-range">—</div></div></div>
-    <div class="kpi-card" title="Graus-Dia de Desenvolvimento: GDU = max(0, ((Tmax + Tmin)/2) - Tbase)"><div class="kpi-icon">🌱</div><div class="kpi-body"><div class="kpi-label">GDU Acumulado</div><div class="kpi-value" id="kpi-gdu-val">—</div><div class="kpi-sub" id="kpi-gdu-sub">Base 10°C · Graus-Dia</div></div></div>
+    <div class="kpi-card" title="Graus-Dia de Desenvolvimento — Soma Térmica (Gilmore &amp; Rogers, 1958; DuPont Pioneer): GDD = ((Tmín. + Tmáx.) / 2) − Tbase, com Tmín. limitada a Tbase e Tmáx. limitada a Tteto. Para o milho: 50 °F (10 °C) a 86 °F (30 °C)."><div class="kpi-icon">🌱</div><div class="kpi-body"><div class="kpi-label">GDU Acumulado</div><div class="kpi-value kpi-value-sm" id="kpi-gdu-val">—</div><div class="kpi-sub" id="kpi-gdu-alt">—</div><div class="kpi-sub" id="kpi-gdu-sub">Base 10 °C · Teto 30 °C · Graus-Dia</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">💧</div><div class="kpi-body"><div class="kpi-label">Umidade Média</div><div class="kpi-value" id="kpi-rh-val">—</div><div class="kpi-sub">Umidade Relativa do Ar</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>
@@ -82,7 +98,7 @@
 <section class="charts-section">
   <div class="charts-grid-wide">
     <div class="chart-card">
-      <div class="chart-header"><span class="chart-title">🌡️ Temperatura Diária (°C)</span><span class="chart-subtitle">Máx · Média · Mín</span></div>
+      <div class="chart-header"><span class="chart-title" id="chartTempTitle">🌡️ Temperatura Diária (°C)</span><span class="chart-subtitle">Máx · Média · Mín</span></div>
       <div class="chart-wrap"><canvas id="chartTemp"></canvas></div>
     </div>
     <div class="chart-card">
@@ -116,7 +132,7 @@
       <div class="chart-wrap"><canvas id="chartSWDW"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-header"><span class="chart-title">📊 Comparativo por Estação</span><span class="chart-subtitle">Temperatura média</span></div>
+      <div class="chart-header"><span class="chart-title">📊 Comparativo por Estação</span><span class="chart-subtitle" id="chartCompareSub">Temperatura média (°C)</span></div>
       <div class="chart-wrap"><canvas id="chartCompare"></canvas></div>
     </div>
   </div>
@@ -125,7 +141,7 @@
 <section class="charts-section">
   <div class="charts-grid-wide">
     <div class="chart-card">
-      <div class="chart-header"><span class="chart-title">🌱 Graus-Dia de Desenvolvimento (GDU)</span><span class="chart-subtitle">GDU Diário & Curva Acumulada</span></div>
+      <div class="chart-header"><span class="chart-title">🌱 Graus-Dia de Desenvolvimento (GDU)</span><span class="chart-subtitle">GDU Diário &amp; Curva Acumulada · °C·dia e °F·dia</span></div>
       <div class="chart-wrap"><canvas id="chartGDU"></canvas></div>
     </div>
     <div class="chart-card">
@@ -143,7 +159,7 @@
         <thead>
           <tr>
             <th>Dispositivo</th><th>Site</th><th>Cidade</th><th>UF</th>
-            <th>T. Média (°C)</th><th>T. Max (°C)</th><th>T. Min (°C)</th><th>GDU Acum.</th>
+            <th id="thTempMean">T. Média (°C)</th><th id="thTempMax">T. Max (°C)</th><th id="thTempMin">T. Min (°C)</th><th id="thGDU">GDU Acum. (°C·dia)</th>
             <th>UR (%)</th><th>Precip (mm)</th><th>ETo (mm)</th>
             <th>Vento (m/s)</th><th>Dir. Vento</th><th>VPD (kPa)</th>
             <th>SWDW (MJ/m²)</th><th>NDVI</th><th>Latitude</th><th>Longitude</th>

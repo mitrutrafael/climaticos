@@ -111,16 +111,43 @@ O pipeline segue o padrão **extract → transform → load**, com os CSVs servi
 | `vpd` | kPa | Déficit de Pressão de Vapor |
 | `swdw` | W/m² | Radiação solar incidente |
 | `ndvi` | — | Índice de Vegetação por Diferença Normalizada |
-| `gdu` | GDU | Graus-Dia de Desenvolvimento: $\max(0, \frac{T_{max} + T_{min}}{2} - T_{base})$ |
+| `gdu` | °C·dia / °F·dia | Graus-Dia de Desenvolvimento — calculado no browser (ver seção abaixo), não persistido no CSV |
 
-### 🌱 Graus-Dia de Desenvolvimento (GDU)
+### 🌱 Graus-Dia de Desenvolvimento (GDU) — Soma Térmica
 
-O dashboard calcula dinamicamente o GDU acumulado e a média diária no período filtrado com base na temperatura basal da cultura selecionada:
-- **10°C** *(padrão)*: Milho, Sorgo e Soja
-- **5°C**: Trigo e cereais de inverno
-- **8°C**: Girassol
-- **12°C**: Feijão e Arroz
-- **15°C**: Cana-de-açúcar e Algodão
+O GDU é calculado dinamicamente no browser a partir de `tair_max` e `tair_min`, seguindo o
+método de **Graus-Dia de Desenvolvimento (Gilmore & Rogers, 1958)** tal como descrito em
+*DuPont Pioneer Corn Growth and Development*:
+
+```
+GDD = ((Tmín. + Tmáx.) / 2) − Tbase
+```
+
+- `Tmín.` = temperatura diária mínima, ou **Tbase** se for inferior a Tbase
+- `Tmáx.` = temperatura diária máxima, ou **Tteto** se for superior a Tteto
+
+Para o **milho**, os limites são **50 °F (10 °C)** e **86 °F (30 °C)**: abaixo de 50 °F ou
+acima de 86 °F há pouco ou nenhum crescimento. Dias totalmente abaixo da base acumulam
+zero. Quando um dos extremos não existe no registro, usa-se `tair_mean` como fallback.
+
+O acumulado é sempre apresentado **nas duas unidades** (1 °C·dia = 1,8 °F·dia), e o valor
+em °C·dia é exatamente equivalente ao cálculo feito diretamente em °F com base 50 °F e
+teto 86 °F.
+
+#### Parâmetros selecionáveis
+
+| Controle | Valores | Observação |
+|----------|---------|------------|
+| **T. Base GDU** | 10 °C *(padrão)* · 5 °C · 8 °C · 12 °C · 15 °C | Milho/Soja · Trigo · Girassol · Feijão/Arroz · Cana/Algodão |
+| **T. Teto GDU** | 30 °C *(padrão)* · 26 °C · 32 °C · Sem teto | 30 °C = 86 °F, teto do milho (DuPont). "Sem teto" reproduz o método clássico |
+
+#### Unidades de temperatura
+
+O seletor **Unidade Temp.** alterna globalmente entre °C e °F e é persistido no
+`localStorage`. Ele converte os cards de temperatura, o gráfico de temperatura, o
+comparativo por estação, os cabeçalhos da tabela e os rótulos de base/teto do GDU.
+O card de **GDU Acumulado** sempre mostra as duas unidades simultaneamente, independentemente
+do seletor.
 
 ---
 
@@ -203,9 +230,10 @@ pytest
 
 ## 📈 Funcionalidades do Dashboard
 
-- **Filtros dinâmicos**: por estação, estado (UF) e período de datas
-- **KPIs**: Temperatura, Umidade, Precipitação, ETo, Vento, VPD, Radiação, NDVI
-- **7 gráficos interativos** (temperatura, precipitação, UR, ETo, VPD, radiação, vento)
+- **Filtros dinâmicos**: por estação, estado (UF), período de datas, base/teto do GDU
+- **Unidade de temperatura** °C/°F global e persistida (com GDU sempre dual °C·dia + °F·dia)
+- **KPIs**: Temperatura, GDU, Umidade, Precipitação, ETo, Vento, VPD, Radiação, NDVI
+- **9 gráficos interativos** (temperatura, precipitação, UR, ETo, VPD, radiação, comparativo, GDU, vento)
 - **Tabela resumo**: estatísticas agregadas por estação
 
 ---

@@ -18,6 +18,34 @@ const CHART_DEFAULTS = {
   }
 };
 
+/* ==========================================
+   UNIDADES DE TEMPERATURA E PARÂMETROS DE GDU
+   ========================================== */
+const TEMP_UNITS = { C: '°C', F: '°F' };
+const TEMP_UNIT_KEY = 'climaticos:tempUnit';
+
+const GDU_BASE_OPTIONS = [
+  { v: 10, tag: 'Milho / Soja' },
+  { v: 5,  tag: 'Trigo / Inverno' },
+  { v: 12, tag: 'Feijão / Arroz' },
+  { v: 15, tag: 'Cana / Algodão' },
+  { v: 8,  tag: 'Girassol' }
+];
+const GDU_CAP_OPTIONS = [
+  { v: 30,   tag: 'Milho (DuPont)' },
+  { v: 32,   tag: 'Teto alto' },
+  { v: 26,   tag: 'Teto baixo' },
+  { v: null, tag: 'Sem teto (clássico)' }
+];
+const GDU_DEFAULT_BASE = 10; // 50 °F — milho
+const GDU_DEFAULT_CAP = 30;  // 86 °F — milho
+const GDU_CAP_NONE = 'none';
+
+let tempUnit = 'C';
+try {
+  if (localStorage.getItem(TEMP_UNIT_KEY) === 'F') tempUnit = 'F';
+} catch (e) { /* storage indisponível: mantém °C */ }
+
 let rawData = [];
 let filteredData = [];
 let charts = {};
@@ -168,19 +196,24 @@ function initFilters() {
   }
 
   const gduBaseSel = document.getElementById('gduBase');
-  if (gduBaseSel) {
-    gduBaseSel.addEventListener('change', () => {
-      updateKPIs();
-      renderGDUChart();
-      renderTable();
-    });
-  }
+  const gduCapSel = document.getElementById('gduCap');
+  const tempUnitSel = document.getElementById('tempUnit');
+  if (gduBaseSel) gduBaseSel.addEventListener('change', renderGDUDependents);
+  if (gduCapSel) gduCapSel.addEventListener('change', renderGDUDependents);
+  if (tempUnitSel) tempUnitSel.addEventListener('change', () => {
+    tempUnit = tempUnitSel.value === 'F' ? 'F' : 'C';
+    try { localStorage.setItem(TEMP_UNIT_KEY, tempUnit); } catch (e) { /* ignora */ }
+    applyTempUnit();
+    updateKPIs();
+    renderAll();
+  });
 
   document.getElementById('applyFilter').addEventListener('click', applyFilters);
   document.getElementById('resetFilter').addEventListener('click', () => {
     stSel.value = 'all';
     statesSel.value = 'all';
-    if (gduBaseSel) gduBaseSel.value = '10';
+    if (gduBaseSel) gduBaseSel.value = String(GDU_DEFAULT_BASE);
+    if (gduCapSel) gduCapSel.value = String(GDU_DEFAULT_CAP);
     document.getElementById('startDate').value = dates[0];
     document.getElementById('endDate').value   = dates[dates.length - 1];
     applyFilters();
@@ -222,28 +255,82 @@ function fmt(v, dec=1) {
   return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
+function toNum(v) { return (v == null || v === '' || isNaN(v)) ? null : Number(v); }
+
+function tempUnitLabel() { return TEMP_UNITS[tempUnit] || TEMP_UNITS.C; }
+function altUnitLabel() { return tempUnit === 'F' ? TEMP_UNITS.C : TEMP_UNITS.F; }
+function cToF(c) { return c * 9 / 5 + 32; }
+function toUnit(c) { const n = toNum(c); return n == null ? null : (tempUnit === 'F' ? cToF(n) : n); }
+function gduToAltUnit(g) { return g * 9 / 5; }
+
 function getTBase() {
   const el = document.getElementById('gduBase');
-  return el ? (parseFloat(el.value) || 10) : 10;
+  if (!el) return GDU_DEFAULT_BASE;
+  const v = parseFloat(el.value);
+  return isNaN(v) ? GDU_DEFAULT_BASE : v;
 }
 
-function calcRowGDU(row, tBase = 10) {
-  let tMean = row.tair_mean;
-  if (row.tair_max != null && row.tair_min != null) {
-    tMean = (row.tair_max + row.tair_min) / 2;
+function getTCap() {
+  const el = document.getElementById('gduCap');
+  if (!el || el.value === GDU_CAP_NONE) return null;
+  const v = parseFloat(el.value);
+  return isNaN(v) ? GDU_DEFAULT_CAP : v;
+}
+
+function gduBasisLabel() {
+  const base = getTBase();
+  const cap = getTCap();
+  const u = tempUnitLabel();
+  const baseTxt = `Base ${fmt(toUnit(base), 0)} ${u}`;
+  return cap == null ? `${baseTxt} · Sem teto` : `${baseTxt} · Teto ${fmt(toUnit(cap), 0)} ${u}`;
+}
+
+/* Graus-Dia de Desenvolvimento — Soma Térmica (Gilmore & Rogers, 1958;
+   DuPont Pioneer, Corn Growth and Development).
+
+     GDD = ((Tmín. + Tmáx.) / 2) − Tbase
+
+   Tmín. é a temperatura diária mínima, ou Tbase se for inferior a Tbase.
+   Tmáx. é a temperatura diária máxima, ou Tteto se for superior a Tteto.
+   Para o milho: Tbase = 50 °F (10 °C) e Tteto = 86 °F (30 °C) — abaixo de
+   50 °F ou acima de 86 °F há pouco ou nenhum crescimento.
+
+   Retorna °C·dia. O equivalente em °F·dia é o resultado × 9/5. */
+function calcGDU(row, tBase = getTBase(), tCap = getTCap()) {
+  let tMin = toNum(row.tair_min);
+  let tMax = toNum(row.tair_max);
+  if (tMin == null || tMax == null) {
+    tMin = toNum(row.tair_mean);
+    tMax = tMin;
   }
-  if (tMean == null || isNaN(tMean)) return null;
-  return Math.max(0, tMean - tBase);
+  if (tMin == null) return null;
+  const lo = Math.max(tMin, tBase);
+  const hi = tCap == null ? tMax : Math.min(tMax, tCap);
+  return Math.max(0, (lo + hi) / 2 - tBase);
+}
+
+function dailyMeanGDU(data, tBase, tCap) {
+  return getDateLabels(data).map(dt => {
+    const gdus = data.filter(r => r.date === dt).map(r => calcGDU(r, tBase, tCap)).filter(v => v != null);
+    return gdus.length ? gdus.reduce((a, b) => a + b, 0) / gdus.length : 0;
+  });
+}
+
+function renderGDUDependents() {
+  updateKPIs();
+  renderGDUChart();
+  renderTable();
 }
 
 function updateKPIs() {
   const d = filteredData;
   const stations = [...new Set(d.map(r => r.device))];
+  const u = tempUnitLabel();
   document.getElementById('totalStations').textContent = `${stations.length} Estações`;
   document.getElementById('totalRecords').textContent  = `${d.length} Registros`;
 
-  document.getElementById('kpi-temp-val').textContent   = fmt(avg(d,'tair_mean')) + ' °C';
-  document.getElementById('kpi-temp-range').textContent = `Máx ${fmt(maxVal(d,'tair_max'))} · Mín ${fmt(minVal(d,'tair_min'))} °C`;
+  document.getElementById('kpi-temp-val').textContent   = fmt(toUnit(avg(d,'tair_mean'))) + ' ' + u;
+  document.getElementById('kpi-temp-range').textContent = `Máx ${fmt(toUnit(maxVal(d,'tair_max')))} · Mín ${fmt(toUnit(minVal(d,'tair_min')))} ${u}`;
   document.getElementById('kpi-rh-val').textContent     = fmt(avg(d,'rh_mean'),0) + ' %';
   document.getElementById('kpi-precip-val').textContent = fmt(sum(d,'precip'),0) + ' mm';
   document.getElementById('kpi-et-val').textContent     = fmt(avg(d,'et')) + ' mm/dia';
@@ -252,24 +339,57 @@ function updateKPIs() {
   document.getElementById('kpi-swdw-val').textContent   = fmt(avg(d,'swdw')) + ' MJ/m²';
   document.getElementById('kpi-ndvi-val').textContent   = fmt(avg(d,'ndvi'),2);
 
-  // GDU (Graus-Dia de Desenvolvimento / Growing Degree Units)
+  // GDU — Soma térmica, sempre exibida nas duas unidades
   const tBase = getTBase();
-  const dates = getDateLabels(d);
-  const dailyMeanGDUs = dates.map(dt => {
-    const dayRows = d.filter(r => r.date === dt);
-    const gdus = dayRows.map(r => calcRowGDU(r, tBase)).filter(v => v != null);
-    return gdus.length ? gdus.reduce((a,b) => a+b, 0) / gdus.length : 0;
-  });
-  const totalGDU = dailyMeanGDUs.reduce((a,b) => a+b, 0);
-  const avgGDU = dates.length ? totalGDU / dates.length : 0;
+  const tCap = getTCap();
+  const dailyGDUs = dailyMeanGDU(d, tBase, tCap);
+  const totalGDU = dailyGDUs.reduce((a, b) => a + b, 0);
+  const avgGDU = dailyGDUs.length ? totalGDU / dailyGDUs.length : 0;
+  const altGDU = tempUnit === 'F' ? totalGDU : gduToAltUnit(totalGDU);
   const isSingleStation = document.getElementById('stationFilter') && document.getElementById('stationFilter').value !== 'all';
 
   const gduValEl = document.getElementById('kpi-gdu-val');
+  const gduAltEl = document.getElementById('kpi-gdu-alt');
   const gduSubEl = document.getElementById('kpi-gdu-sub');
-  if (gduValEl) gduValEl.textContent = fmt(totalGDU, 0) + ' GDU';
+  if (gduValEl) gduValEl.textContent = fmt(totalGDU, 0) + ' ' + u + '·dia';
+  if (gduAltEl) gduAltEl.textContent = '≡ ' + fmt(altGDU, 0) + ' ' + altUnitLabel() + '·dia';
   if (gduSubEl) {
-    gduSubEl.textContent = `Média: ${fmt(avgGDU, 1)}/dia · Base ${tBase}°C${isSingleStation ? '' : ' (Reg.)'}`;
+    gduSubEl.textContent = `${gduBasisLabel()} · Média ${fmt(avgGDU, 1)}/dia${isSingleStation ? '' : ' (Reg.)'}`;
   }
+}
+
+/* Rótulos estáticos que dependem da unidade de temperatura */
+function findOption(id, value) {
+  const el = document.getElementById(id);
+  return el ? [...el.options].find(o => o.value === value) : null;
+}
+
+function applyTempUnit() {
+  const u = tempUnitLabel();
+  const tempUnitSel = document.getElementById('tempUnit');
+  if (tempUnitSel) tempUnitSel.value = tempUnit;
+
+  GDU_BASE_OPTIONS.forEach(o => {
+    const opt = findOption('gduBase', String(o.v));
+    if (opt) opt.textContent = `${fmt(toUnit(o.v), 0)} ${u} · ${o.tag}`;
+  });
+  GDU_CAP_OPTIONS.forEach(o => {
+    const opt = findOption('gduCap', o.v == null ? GDU_CAP_NONE : String(o.v));
+    if (opt) opt.textContent = o.v == null ? o.tag : `${fmt(toUnit(o.v), 0)} ${u} · ${o.tag}`;
+  });
+
+  const labels = {
+    chartTempTitle: `🌡️ Temperatura Diária (${u})`,
+    chartCompareSub: `Temperatura média (${u})`,
+    thTempMean: `T. Média (${u})`,
+    thTempMax: `T. Max (${u})`,
+    thTempMin: `T. Min (${u})`,
+    thGDU: `GDU Acum. (${u}·dia)`
+  };
+  Object.entries(labels).forEach(([id, text]) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = text;
+  });
 }
 
 /* ==========================================
@@ -321,11 +441,13 @@ function renderAll() {
 
 function renderTempChart() {
   const labels = getDateLabels(filteredData);
+  const u = tempUnitLabel();
+  const inUnit = key => aggregateByDate(filteredData, key).map(v => toUnit(v));
   makeLineChart('chartTemp', labels, [
-    { label: 'T. Máx', data: aggregateByDate(filteredData,'tair_max'), borderColor: '#fb923c', tension:0.3, fill:false, pointRadius:0 },
-    { label: 'T. Média', data: aggregateByDate(filteredData,'tair_mean'), borderColor: '#38bdf8', tension:0.3, fill:false, pointRadius:0 },
-    { label: 'T. Mín', data: aggregateByDate(filteredData,'tair_min'), borderColor: '#818cf8', backgroundColor:'rgba(129,140,248,0.08)', tension:0.3, fill:'-1', pointRadius:0 },
-  ], '°C');
+    { label: `T. Máx (${u})`, data: inUnit('tair_max'), borderColor: '#fb923c', tension:0.3, fill:false, pointRadius:0 },
+    { label: `T. Média (${u})`, data: inUnit('tair_mean'), borderColor: '#38bdf8', tension:0.3, fill:false, pointRadius:0 },
+    { label: `T. Mín (${u})`, data: inUnit('tair_min'), borderColor: '#818cf8', backgroundColor:'rgba(129,140,248,0.08)', tension:0.3, fill:'-1', pointRadius:0 },
+  ], u);
 }
 
 function renderPrecipChart() {
@@ -363,8 +485,8 @@ function renderSWDWChart() {
 function renderCompareChart() {
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
   const labels   = stations.map(s => { const i = filteredData.find(r=>r.device===s); return `${s}\n${i.city}`; });
-  const means    = stations.map(s => avg(filteredData.filter(r=>r.device===s),'tair_mean'));
-  makeBarChart('chartCompare', labels, [{ label:'T. Média (°C)', data:means,
+  const means    = stations.map(s => toUnit(avg(filteredData.filter(r=>r.device===s),'tair_mean')));
+  makeBarChart('chartCompare', labels, [{ label:`T. Média (${tempUnitLabel()})`, data:means,
     backgroundColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]+'99'),
     borderColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1.5, borderRadius:6 }]);
 }
@@ -376,11 +498,10 @@ function renderGDUChart() {
   const ctx = canvas.getContext('2d');
   const labels = getDateLabels(filteredData);
   const tBase = getTBase();
-
-  const daily = labels.map(d => {
-    const vals = filteredData.filter(r => r.date === d).map(r => calcRowGDU(r, tBase)).filter(x => x != null);
-    return vals.length ? vals.reduce((a,b) => a+b, 0) / vals.length : 0;
-  });
+  const tCap = getTCap();
+  const u = tempUnitLabel();
+  const daily = dailyMeanGDU(filteredData, tBase, tCap);
+  const basis = gduBasisLabel();
 
   let runningSum = 0;
   const cumulative = daily.map(v => {
@@ -394,7 +515,7 @@ function renderGDUChart() {
       datasets: [
         {
           type: 'bar',
-          label: `GDU Diário (Base ${tBase}°C)`,
+          label: `GDU Diário (${basis})`,
           data: daily.map(v => Number(v.toFixed(1))),
           backgroundColor: 'rgba(56, 189, 248, 0.4)',
           borderColor: '#38bdf8',
@@ -437,14 +558,14 @@ function renderGDUChart() {
         y: {
           type: 'linear',
           position: 'left',
-          title: { display: true, text: 'GDU / dia', color: '#8b9ab0', font: { size: 10 } },
+          title: { display: true, text: `GDU / dia (${u}·dia)`, color: '#8b9ab0', font: { size: 10 } },
           grid: { color: 'rgba(255,255,255,0.05)' },
           ticks: { color: '#8b9ab0', font: { size: 10 } }
         },
         y1: {
           type: 'linear',
           position: 'right',
-          title: { display: true, text: 'GDU Acumulado', color: '#34d399', font: { size: 10 } },
+          title: { display: true, text: `GDU Acumulado (${u}·dia)`, color: '#34d399', font: { size: 10 } },
           grid: { drawOnChartArea: false },
           ticks: { color: '#34d399', font: { size: 10 } }
         }
@@ -475,11 +596,12 @@ function renderTable() {
     const mx = maxVal(d,'tair_max');
     const mn = minVal(d,'tair_min');
     const tBase = getTBase();
-    const gduStation = d.map(r => calcRowGDU(r, tBase)).filter(v => v != null).reduce((a,b) => a+b, 0);
+    const tCap = getTCap();
+    const gduStation = d.map(r => calcGDU(r, tBase, tCap)).filter(v => v != null).reduce((a,b) => a+b, 0);
     const row = document.createElement('tr');
     row.innerHTML = `
       <td>${s}</td><td>${info.site}</td><td>${info.city}</td><td>${info.state}</td>
-      <td>${fmt(avg(d,'tair_mean'))}</td><td>${fmt(mx)}</td><td>${fmt(mn)}</td>
+      <td>${fmt(toUnit(avg(d,'tair_mean')))}</td><td>${fmt(toUnit(mx))}</td><td>${fmt(toUnit(mn))}</td>
       <td><strong>${fmt(gduStation, 0)}</strong></td>
       <td>${fmt(avg(d,'rh_mean'),0)}</td><td>${fmt(sum(d,'precip'),1)}</td>
       <td>${fmt(avg(d,'et'))}</td><td>${fmt(avg(d,'wind_speed'))}</td>
@@ -504,6 +626,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('startDate').value = fmt8601(start);
   document.getElementById('endDate').value   = fmt8601(today);
 
+  applyTempUnit();
   loadFromCSV();
   scheduleAutoRefresh();
 });
