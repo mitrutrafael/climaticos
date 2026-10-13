@@ -1,5 +1,5 @@
 /* =============================================
-Agrometerologia Vylor — app.js
+   Agrometeorologia Vylor — app.js
    Dashboard consome apenas os CSVs consolidados
    pelo pipeline ETL (GitHub Actions diário).
    Nenhuma chave de API é exposta no browser.
@@ -51,7 +51,8 @@ let filteredData = [];
 let charts = {};
 let refreshTimer = null;
 let lastUpdate = null;
-let filtersInitialized = false;
+let dateRange = { min: '', max: '' };
+let loading = false;
 
 /* ==========================================
    CARGA DE DADOS — CSVs consolidados
@@ -78,20 +79,23 @@ function normalize(row) {
   return row;
 }
 
-async function loadFromCSV() {
+async function loadFromCSV(toastMsg = '📊 Dados carregados do pipeline ETL.') {
+  if (loading) return;
+  loading = true;
   setLoadingState(true, 'Carregando dados consolidados...');
   try {
-    const [arable, davis] = await Promise.all(
+    const sources = await Promise.all(
       CSV_SOURCES.map(source => parseCSV(cachedUrl(source)).then(rows => rows.map(normalize)))
     );
-    rawData = [...arable, ...davis].filter(r => r.device && r.date);
+    const data = sources.flat().filter(r => r.device && r.date);
+    if (!data.length) throw new Error('CSVs sem registros');
+    rawData = data;
     lastUpdate = new Date();
     setLoadingState(false);
     updateLastUpdateBadge();
-    initFilters();
+    populateFilters();
     applyFilters();
-    showToast('📊 Dados carregados do pipeline ETL.');
-    if (!rawData.length) throw new Error('CSVs sem registros');
+    showToast(toastMsg);
   } catch (e) {
     console.error('Falha ao carregar CSVs:', e);
     const overlay = document.getElementById('loadingOverlay');
@@ -100,6 +104,8 @@ async function loadFromCSV() {
         '<div style="text-align:center"><div style="font-size:2rem;margin-bottom:12px">⚠️</div><div>Não foi possível carregar os dados.<br>Verifique sua conexão ou execute o pipeline ETL.</div></div>';
     }
     setLoadingState(false);
+  } finally {
+    loading = false;
   }
 }
 
@@ -143,10 +149,7 @@ function updateLastUpdateBadge() {
 function scheduleAutoRefresh() {
   if (refreshTimer) clearInterval(refreshTimer);
   refreshTimer = setInterval(() => {
-    // Filtros são reinicializados para capturar novas estações/datas
-    filtersInitialized = false;
-    loadFromCSV();
-    showToast('🔄 Dados atualizados automaticamente!');
+    loadFromCSV('🔄 Dados atualizados automaticamente!');
   }, REFRESH_INTERVAL_MS);
 }
 
@@ -166,41 +169,41 @@ function showToast(msg) {
 /* ==========================================
    FILTERS
    ========================================== */
-function fillOption(select, value) {
+function fillOption(select, value, label = value) {
   const exists = [...select.options].some(o => o.value === value);
-  if (!exists) select.add(new Option(value, value));
+  if (!exists) select.add(new Option(label, value));
 }
 
-function initFilters() {
-  if (filtersInitialized) return;
-  filtersInitialized = true;
-
+/* Preenche as opções dos filtros (idempotente: pode rodar a cada recarga). */
+function populateFilters() {
   const stations = [...new Set(rawData.map(r => r.device))].sort();
-  const states   = [...new Set(rawData.map(r => r.state))].sort();
+  const states   = [...new Set(rawData.map(r => r.state).filter(Boolean))].sort();
   const dates    = rawData.map(r => r.date).filter(Boolean).sort();
+  dateRange = { min: dates[0] || '', max: dates[dates.length - 1] || '' };
 
   const stSel = document.getElementById('stationFilter');
   stations.forEach(s => {
     const info = rawData.find(r => r.device === s);
-    const label = info ? `${s} · ${info.city}` : s;
-    fillOption(stSel, label);
-    stSel.options[stSel.options.length - 1].value = s;
+    fillOption(stSel, s, info && info.city ? `${s} · ${info.city}` : s);
   });
 
   const statesSel = document.getElementById('stateFilter');
   states.forEach(s => fillOption(statesSel, s));
 
-  if (!document.getElementById('startDate').value && dates.length) {
-    document.getElementById('startDate').value = dates[0];
-    document.getElementById('endDate').value   = dates[dates.length - 1];
-  }
+  const startEl = document.getElementById('startDate');
+  const endEl = document.getElementById('endDate');
+  if (!startEl.value && dateRange.min) startEl.value = dateRange.min;
+  if (!endEl.value && dateRange.max) endEl.value = dateRange.max;
+}
 
+/* Registra os eventos dos controles uma única vez (no boot). */
+function bindControls() {
   const gduBaseSel = document.getElementById('gduBase');
   const gduCapSel = document.getElementById('gduCap');
   const tempUnitSel = document.getElementById('tempUnit');
-  if (gduBaseSel) gduBaseSel.addEventListener('change', renderGDUDependents);
-  if (gduCapSel) gduCapSel.addEventListener('change', renderGDUDependents);
-  if (tempUnitSel) tempUnitSel.addEventListener('change', () => {
+  gduBaseSel.addEventListener('change', renderGDUDependents);
+  gduCapSel.addEventListener('change', renderGDUDependents);
+  tempUnitSel.addEventListener('change', () => {
     tempUnit = tempUnitSel.value === 'F' ? 'F' : 'C';
     try { localStorage.setItem(TEMP_UNIT_KEY, tempUnit); } catch (e) { /* ignora */ }
     applyTempUnit();
@@ -208,31 +211,23 @@ function initFilters() {
     renderAll();
   });
 
-  const gduAltBtn = document.getElementById('kpi-gdu-alt');
-  if (gduAltBtn) {
-    gduAltBtn.addEventListener('click', () => {
-      const nextUnit = tempUnit === 'C' ? 'F' : 'C';
-      if (tempUnitSel) {
-        tempUnitSel.value = nextUnit;
-        tempUnitSel.dispatchEvent(new Event('change'));
-      }
-    });
-  }
+  document.getElementById('kpi-gdu-alt').addEventListener('click', () => {
+    tempUnitSel.value = tempUnit === 'C' ? 'F' : 'C';
+    tempUnitSel.dispatchEvent(new Event('change'));
+  });
 
   document.getElementById('applyFilter').addEventListener('click', applyFilters);
   document.getElementById('resetFilter').addEventListener('click', () => {
-    stSel.value = 'all';
-    statesSel.value = 'all';
-    if (gduBaseSel) gduBaseSel.value = String(GDU_DEFAULT_BASE);
-    if (gduCapSel) gduCapSel.value = String(GDU_DEFAULT_CAP);
-    document.getElementById('startDate').value = dates[0];
-    document.getElementById('endDate').value   = dates[dates.length - 1];
+    document.getElementById('stationFilter').value = 'all';
+    document.getElementById('stateFilter').value = 'all';
+    gduBaseSel.value = String(GDU_DEFAULT_BASE);
+    gduCapSel.value = String(GDU_DEFAULT_CAP);
+    document.getElementById('startDate').value = dateRange.min;
+    document.getElementById('endDate').value   = dateRange.max;
     applyFilters();
   });
   document.getElementById('refreshBtn').addEventListener('click', () => {
-    filtersInitialized = false;
-    loadFromCSV();
-    showToast('🔄 Buscando dados mais recentes...');
+    loadFromCSV('🔄 Dados mais recentes carregados.');
   });
 }
 
@@ -257,10 +252,14 @@ function applyFilters() {
 /* ==========================================
    KPIs
    ========================================== */
-function avg(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null && !isNaN(x)); return v.length ? v.reduce((a,b) => a+b, 0)/v.length : null; }
-function sum(arr, key) { return arr.map(r => r[key]).filter(x => x != null && !isNaN(x)).reduce((a,b) => a+b, 0); }
-function maxVal(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null && !isNaN(x)); return v.length ? Math.max(...v) : null; }
-function minVal(arr, key) { const v = arr.map(r => r[key]).filter(x => x != null && !isNaN(x)); return v.length ? Math.min(...v) : null; }
+function values(arr, key) { return arr.map(r => r[key]).filter(x => x != null && x !== '' && !isNaN(x)); }
+function avg(arr, key) { const v = values(arr, key); return v.length ? v.reduce((a,b) => a+b, 0)/v.length : null; }
+function sum(arr, key) { return values(arr, key).reduce((a,b) => a+b, 0); }
+// reduce em vez de Math.max(...v): evita estouro de pilha com muitos registros
+function maxVal(arr, key) { const v = values(arr, key); return v.length ? v.reduce((a,b) => a > b ? a : b) : null; }
+function minVal(arr, key) { const v = values(arr, key); return v.length ? v.reduce((a,b) => a < b ? a : b) : null; }
+const HTML_ESCAPES = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+function escapeHTML(v) { return String(v ?? '').replace(/[&<>"']/g, c => HTML_ESCAPES[c]); }
 function fmt(v, dec=1) {
   if (v == null || isNaN(v)) return '—';
   return Number(v).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -365,7 +364,10 @@ function updateKPIs() {
   document.getElementById('kpi-rh-val').textContent     = fmt(avg(d,'rh_mean'),0) + ' %';
   document.getElementById('kpi-precip-val').textContent = fmt(sum(d,'precip'),0) + ' mm';
   document.getElementById('kpi-et-val').textContent     = fmt(avg(d,'et')) + ' mm/dia';
-  document.getElementById('kpi-wind-val').textContent   = fmt(avg(d,'wind_speed')) + ' m/s';
+  // Vento — média geral + mínima/máxima das médias diárias (cada linha = estação·dia)
+  document.getElementById('kpi-wind-val').textContent   = fmt(avg(d,'wind_speed'));
+  document.getElementById('kpi-wind-min').textContent   = fmt(minVal(d,'wind_speed'));
+  document.getElementById('kpi-wind-max').textContent   = fmt(maxVal(d,'wind_speed'));
   document.getElementById('kpi-vpd-val').textContent    = fmt(avg(d,'vpd')) + ' kPa';
   document.getElementById('kpi-swdw-val').textContent   = fmt(avg(d,'swdw')) + ' MJ/m²';
   document.getElementById('kpi-ndvi-val').textContent   = fmt(avg(d,'ndvi'),2);
@@ -444,11 +446,22 @@ function applyTempUnit() {
    ========================================== */
 function destroyChart(id) { if (charts[id]) { charts[id].destroy(); charts[id] = null; } }
 function getDateLabels(data) { return [...new Set(data.map(r => r.date).filter(Boolean))].sort(); }
+function groupBy(data, key) {
+  const map = new Map();
+  data.forEach(r => {
+    const k = r[key];
+    if (!map.has(k)) map.set(k, []);
+    map.get(k).push(r);
+  });
+  return map;
+}
 function aggregateByDate(data, key, fn='avg') {
+  const byDate = groupBy(data, 'date');
   return getDateLabels(data).map(d => {
-    const vals = data.filter(r => r.date === d).map(r => r[key]).filter(x => x != null && !isNaN(x));
+    const vals = values(byDate.get(d) || [], key);
     if (!vals.length) return null;
-    return fn === 'sum' ? vals.reduce((a,b)=>a+b,0) : vals.reduce((a,b)=>a+b,0)/vals.length;
+    const total = vals.reduce((a,b)=>a+b,0);
+    return fn === 'sum' ? total : total/vals.length;
   });
 }
 
@@ -634,13 +647,24 @@ function renderGDUChart() {
 function renderWindChart() {
   const labels   = getDateLabels(filteredData);
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
+  const byStation = groupBy(filteredData, 'device');
   const datasets = stations.map((s,i) => {
-    const sd = filteredData.filter(r=>r.device===s);
+    const sd = byStation.get(s);
+    const byDate = groupBy(sd, 'date');
     return { label:`${s}·${sd[0].city}`, borderColor:PALETTE[i%PALETTE.length],
       backgroundColor:'transparent', tension:0.3, pointRadius:0, borderWidth:1.5,
-      data: labels.map(d => { const v=sd.filter(r=>r.date===d).map(r=>r.wind_speed).filter(x=>x!=null); return v.length?v.reduce((a,b)=>a+b)/v.length:null; }) };
+      data: labels.map(d => avg(byDate.get(d) || [], 'wind_speed')) };
   });
   makeLineChart('chartWind', labels, datasets, 'm/s');
+}
+
+/* Direção predominante = moda do período (antes usava só o 1º registro) */
+function prevailingWindDir(rows) {
+  const counts = new Map();
+  rows.forEach(r => { if (r.wind_dir) counts.set(r.wind_dir, (counts.get(r.wind_dir) || 0) + 1); });
+  let best = null, bestN = 0;
+  counts.forEach((n, dir) => { if (n > bestN) { best = dir; bestN = n; } });
+  return best || '—';
 }
 
 function renderTable() {
@@ -649,8 +673,9 @@ function renderTable() {
   tbody.innerHTML = '';
   const tBase = getTBase();
   const tCap = getTCap();
+  const byStation = groupBy(filteredData, 'device');
   stations.forEach(s => {
-    const d = filteredData.filter(r=>r.device===s);
+    const d = byStation.get(s);
     const info = d[0];
     const mx = maxVal(d,'tair_max');
     const mn = minVal(d,'tair_min');
@@ -658,15 +683,16 @@ function renderTable() {
     const gduStation = toGduUnit(gduStationC);
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td>${s}</td><td>${info.site}</td><td>${info.city}</td><td>${info.state}</td>
+      <td>${escapeHTML(s)}</td><td>${escapeHTML(info.site)}</td><td>${escapeHTML(info.city)}</td><td>${escapeHTML(info.state)}</td>
       <td>${fmt(toUnit(avg(d,'tair_mean')))}</td><td>${fmt(toUnit(mx))}</td><td>${fmt(toUnit(mn))}</td>
       <td><strong>${fmt(gduStation, 0)}</strong></td>
       <td>${fmt(avg(d,'rh_mean'),0)}</td><td>${fmt(sum(d,'precip'),1)}</td>
-      <td>${fmt(avg(d,'et'))}</td><td>${fmt(avg(d,'wind_speed'))}</td>
-      <td>${info.wind_dir || '—'}</td><td>${fmt(avg(d,'vpd'))}</td>
+      <td>${fmt(avg(d,'et'))}</td>
+      <td>${fmt(avg(d,'wind_speed'))}</td><td>${fmt(minVal(d,'wind_speed'))}</td><td>${fmt(maxVal(d,'wind_speed'))}</td>
+      <td>${escapeHTML(prevailingWindDir(d))}</td><td>${fmt(avg(d,'vpd'))}</td>
       <td>${fmt(avg(d,'swdw'))}</td><td>${fmt(avg(d,'ndvi'),2)}</td>
-      <td>${info.lat ? Number(info.lat).toFixed(4) : '—'}</td>
-      <td>${info.lon ? Number(info.lon).toFixed(4) : '—'}</td>`;
+      <td>${toNum(info.lat) != null ? Number(info.lat).toFixed(4) : '—'}</td>
+      <td>${toNum(info.lon) != null ? Number(info.lon).toFixed(4) : '—'}</td>`;
     tbody.appendChild(row);
   });
 }
@@ -685,6 +711,7 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('endDate').value   = fmt8601(today);
 
   applyTempUnit();
+  bindControls();
   loadFromCSV();
   scheduleAutoRefresh();
 });

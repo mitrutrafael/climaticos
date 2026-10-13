@@ -1,4 +1,4 @@
-# 🌤️ Agrometerologia Vylor — Projeto de Dados Climáticos
+# 🌤️ Agrometeorologia Vylor — Projeto de Dados Climáticos
 
 > Dashboard interativo e análise estatística dos dados das estações **Arable** e **Davis** no Brasil.
 
@@ -8,7 +8,7 @@
 
 ## 📋 Sobre o Projeto
 
-O **Agrometerologia Vylor** é uma plataforma de visualização e análise de dados climáticos coletados por estações físicas **Arable** e **Davis** distribuídas pelo Brasil. O sistema consome a **Arable Cloud API** e a **WeatherLink v2 API**, consolida os dados em CSVs e publica um dashboard estático (GitHub Pages / Netlify).
+O **Agrometeorologia Vylor** é uma plataforma de visualização e análise de dados climáticos coletados por estações físicas **Arable** e **Davis** distribuídas pelo Brasil. O sistema consome a **Arable Cloud API** e a **WeatherLink v2 API**, consolida os dados em CSVs e publica um dashboard estático (GitHub Pages / Netlify).
 
 ---
 

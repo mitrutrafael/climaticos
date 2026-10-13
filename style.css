@@ -1,5 +1,5 @@
 /* =============================
-   Agrometerologia Vylor — style.css
+   Agrometeorologia Vylor — style.css
    ============================= */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -44,7 +44,8 @@ body {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
 }
 .brand { display: flex; align-items: center; gap: 14px; }
-.brand-icon { font-size: 2.2rem; filter: drop-shadow(0 0 8px #38bdf880); }
+.brand-logo { height: 40px; width: auto; display: block; flex-shrink: 0; }
+.brand-divider { width: 1px; align-self: stretch; background: rgba(255,255,255,0.14); }
 .brand-title {
   font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px;
   background: linear-gradient(90deg, #38bdf8, #818cf8);
@@ -126,6 +127,18 @@ body {
 .kpi-unit { font-size: 0.85rem; font-weight: 600; color: var(--accent3); letter-spacing: -0.2px; }
 .kpi-sub { font-size: 0.72rem; color: var(--muted); line-height: 1.4; }
 .gdu-sep { opacity: 0.4; margin: 0 4px; }
+
+/* ---- VENTO: média + mín/máx ---- */
+.kpi-unit-muted { color: var(--muted); font-weight: 500; }
+.kpi-minmax { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.kpi-chip {
+  display: inline-flex; align-items: baseline; gap: 5px;
+  padding: 2px 8px; border-radius: 999px; font-size: 0.72rem;
+  background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.22);
+  color: var(--text);
+}
+.kpi-chip-label { color: var(--muted); font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.4px; }
+.kpi-chip strong { font-weight: 700; }
 
 /* ---- GDU CARD PERSONALIZADO ---- */
 .kpi-card-gdu {
@@ -238,8 +251,23 @@ td strong { color: var(--accent3); font-weight: 700; }
 @media (max-width: 700px) {
   .header, .filter-bar, .kpi-section, .charts-section, .table-section { padding-left: 16px; padding-right: 16px; }
   .charts-grid-3 { grid-template-columns: 1fr; }
-  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .kpi-card { padding: 14px; gap: 10px; }
+  .kpi-icon { font-size: 1.5rem; }
+  .kpi-value { font-size: 1.4rem; }
+  .filter-group { flex: 1 1 140px; min-width: 0; }
+  .filter-group select, .filter-group input { min-width: 0; width: 100%; }
+  .brand { min-width: 0; }
   .brand-title { font-size: 1.2rem; }
+  .brand-logo { height: 30px; }
+  .header-inner { flex-wrap: wrap; }
+}
+@media (max-width: 440px) {
+  .kpi-grid { grid-template-columns: minmax(0, 1fr); }
+  .brand-divider, .brand-sub { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
 }
 
 /* ---- REFRESH BUTTON ---- */
