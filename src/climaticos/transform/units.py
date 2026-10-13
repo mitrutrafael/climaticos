@@ -42,6 +42,15 @@ def inches_to_mm(inches: Any) -> float | None:
     return round(i * 25.4, 1) if i is not None else None
 
 
+def w_m2_to_mj_day(w_m2: Any) -> float | None:
+    """Converte irradiância média diária (W/m²) em radiação diária (MJ/m²·dia).
+
+    1 W/m² sustentado por 24 h = 86 400 J/m² = 0,0864 MJ/m².
+    """
+    w = to_float(w_m2)
+    return round(w * 0.0864, 1) if w is not None else None
+
+
 def mph_to_ms(mph: Any) -> float | None:
     """Converte milhas/hora para m/s (2 casas decimais)."""
     m = to_float(mph)

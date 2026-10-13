@@ -16,6 +16,7 @@ from .units import (
     inches_to_mm,
     mph_to_ms,
     round1,
+    w_m2_to_mj_day,
 )
 
 
@@ -44,6 +45,9 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
     * precipitação = soma de ``rainfall_mm``;
     * et = soma de ``et`` (polegadas → mm);
     * vento = média de ``wind_speed_avg`` (mph → m/s);
+    * vento máx. (rajada) = maior ``wind_speed_hi`` do dia (mph → m/s);
+    * vento mín. = menor ``wind_speed_avg`` dos intervalos do dia (mph → m/s);
+    * radiação = média de ``solar_rad_avg`` (W/m² → MJ/m²·dia);
     * VPD calculado a partir da temperatura e umidade médias.
 
     Args:
@@ -71,9 +75,14 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
         precip = round1(sum(r.get("rainfall_mm") or 0 for r in group))
         et = round1(sum(inches_to_mm(r.get("et")) or 0 for r in group))
         wind = round1(_mean(mph_to_ms(r.get("wind_speed_avg")) for r in group))
+        wind_hi = [mph_to_ms(r.get("wind_speed_hi")) for r in group if r.get("wind_speed_hi") is not None]
+        wind_lo = [mph_to_ms(r.get("wind_speed_avg")) for r in group if r.get("wind_speed_avg") is not None]
+        wind_max = round1(max(wind_hi)) if wind_hi else None
+        wind_min = round1(min(wind_lo)) if wind_lo else None
         wd_value = next((r.get("wind_dir_of_prevail") for r in group if r.get("wind_dir_of_prevail") is not None), None)
         wind_dir = deg_to_compass(wd_value)
-        swdw = round1(_mean(r.get("solar_rad_avg") for r in group))
+        # solar_rad_avg vem em W/m²; o dashboard (e a Arable) usam MJ/m²·dia
+        swdw = w_m2_to_mj_day(_mean(r.get("solar_rad_avg") for r in group))
         vpd = calc_vpd(t_mean, rh_mean)
 
         row = {
@@ -89,6 +98,8 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
             "precip": precip,
             "et": et,
             "wind_speed": wind,
+            "wind_speed_max": wind_max,
+            "wind_speed_min": wind_min,
             "wind_dir": wind_dir,
             "vpd": vpd,
             "swdw": swdw,

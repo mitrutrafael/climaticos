@@ -63,6 +63,8 @@ OUTPUT_COLUMNS: tuple[str, ...] = (
     "precip",
     "et",
     "wind_speed",
+    "wind_speed_max",
+    "wind_speed_min",
     "wind_dir",
     "vpd",
     "swdw",

@@ -11,6 +11,7 @@ from climaticos.transform.units import (
     rh_ratio_to_percent,
     round1,
     to_float,
+    w_m2_to_mj_day,
 )
 
 
@@ -77,3 +78,9 @@ class TestRhRatio:
         assert rh_ratio_to_percent(0.345) == 34.5
         assert rh_ratio_to_percent(None) is None
         assert rh_ratio_to_percent(1.0) == 100.0
+
+class TestSolarRadiation:
+    def test_w_m2_to_mj_day(self):
+        assert w_m2_to_mj_day(250) == 21.6
+        assert w_m2_to_mj_day(0) == 0.0
+        assert w_m2_to_mj_day(None) is None

@@ -81,6 +81,7 @@ class DavisExtractor:
                         "rainfall_mm": rec.get("rainfall_mm"),
                         "et": rec.get("et"),
                         "wind_speed_avg": rec.get("wind_speed_avg"),
+                        "wind_speed_hi": rec.get("wind_speed_hi"),
                         "wind_dir_of_prevail": rec.get("wind_dir_of_prevail"),
                         "solar_rad_avg": rec.get("solar_rad_avg"),
                     }

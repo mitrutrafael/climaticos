@@ -74,7 +74,7 @@ function parseCSV(url) {
 
 function normalize(row) {
   // Uniformiza tipos numéricos vindos do PapaParse (strings em alguns casos)
-  ['tair_mean','tair_max','tair_min','rh_mean','precip','et','wind_speed','vpd','swdw','ndvi','lat','lon']
+  ['tair_mean','tair_max','tair_min','rh_mean','precip','et','wind_speed','wind_speed_max','wind_speed_min','vpd','swdw','ndvi','lat','lon']
     .forEach(k => { if (row[k] !== '' && row[k] != null) { const n = Number(row[k]); row[k] = isNaN(n) ? null : n; } });
   return row;
 }
@@ -364,10 +364,10 @@ function updateKPIs() {
   document.getElementById('kpi-rh-val').textContent     = fmt(avg(d,'rh_mean'),0) + ' %';
   document.getElementById('kpi-precip-val').textContent = fmt(sum(d,'precip'),0) + ' mm';
   document.getElementById('kpi-et-val').textContent     = fmt(avg(d,'et')) + ' mm/dia';
-  // Vento — média geral + mínima/máxima das médias diárias (cada linha = estação·dia)
+  // Vento — média geral, mínima e máxima (rajada) do período
   document.getElementById('kpi-wind-val').textContent   = fmt(avg(d,'wind_speed'));
-  document.getElementById('kpi-wind-min').textContent   = fmt(minVal(d,'wind_speed'));
-  document.getElementById('kpi-wind-max').textContent   = fmt(maxVal(d,'wind_speed'));
+  document.getElementById('kpi-wind-min').textContent   = fmt(windMin(d));
+  document.getElementById('kpi-wind-max').textContent   = fmt(windMax(d));
   document.getElementById('kpi-vpd-val').textContent    = fmt(avg(d,'vpd')) + ' kPa';
   document.getElementById('kpi-swdw-val').textContent   = fmt(avg(d,'swdw')) + ' MJ/m²';
   document.getElementById('kpi-ndvi-val').textContent   = fmt(avg(d,'ndvi'),2);
@@ -644,9 +644,29 @@ function renderGDUChart() {
   });
 }
 
+/* Vento mín./máx. (rajada) diários vêm do ETL (wind_speed_min / wind_speed_max).
+   Registros antigos sem esses campos usam a média diária como aproximação. */
+function windMinOf(r) { return toNum(r.wind_speed_min) ?? toNum(r.wind_speed); }
+function windMaxOf(r) { return toNum(r.wind_speed_max) ?? toNum(r.wind_speed); }
+function windMin(rows) { return minVal(rows.map(r => ({ v: windMinOf(r) })), 'v'); }
+function windMax(rows) { return maxVal(rows.map(r => ({ v: windMaxOf(r) })), 'v'); }
+
 function renderWindChart() {
   const labels   = getDateLabels(filteredData);
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
+  const sub = document.getElementById('chartWindSub');
+  if (sub) sub.textContent = stations.length === 1 ? 'Máx (rajada) · Média · Mín' : 'Média diária por estação';
+  // Uma estação: faixa Máx (rajada) · Média · Mín, como no gráfico de temperatura
+  if (stations.length === 1) {
+    const byDate = groupBy(filteredData, 'date');
+    const series = fn => labels.map(d => fn(byDate.get(d) || []));
+    makeLineChart('chartWind', labels, [
+      { label:'Máx / rajada (m/s)', data:series(windMax), borderColor:'#fb923c', tension:0.3, fill:false, pointRadius:0, borderWidth:1.5 },
+      { label:'Média (m/s)', data:series(rows => avg(rows, 'wind_speed')), borderColor:'#38bdf8', tension:0.3, fill:false, pointRadius:0, borderWidth:1.5 },
+      { label:'Mín (m/s)', data:series(windMin), borderColor:'#818cf8', backgroundColor:'rgba(129,140,248,0.08)', tension:0.3, fill:'-1', pointRadius:0, borderWidth:1.5 },
+    ], 'm/s');
+    return;
+  }
   const byStation = groupBy(filteredData, 'device');
   const datasets = stations.map((s,i) => {
     const sd = byStation.get(s);
@@ -688,7 +708,7 @@ function renderTable() {
       <td><strong>${fmt(gduStation, 0)}</strong></td>
       <td>${fmt(avg(d,'rh_mean'),0)}</td><td>${fmt(sum(d,'precip'),1)}</td>
       <td>${fmt(avg(d,'et'))}</td>
-      <td>${fmt(avg(d,'wind_speed'))}</td><td>${fmt(minVal(d,'wind_speed'))}</td><td>${fmt(maxVal(d,'wind_speed'))}</td>
+      <td>${fmt(avg(d,'wind_speed'))}</td><td>${fmt(windMin(d))}</td><td>${fmt(windMax(d))}</td>
       <td>${escapeHTML(prevailingWindDir(d))}</td><td>${fmt(avg(d,'vpd'))}</td>
       <td>${fmt(avg(d,'swdw'))}</td><td>${fmt(avg(d,'ndvi'),2)}</td>
       <td>${toNum(info.lat) != null ? Number(info.lat).toFixed(4) : '—'}</td>

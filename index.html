@@ -104,7 +104,7 @@
     <div class="kpi-card"><div class="kpi-icon">💧</div><div class="kpi-body"><div class="kpi-label">Umidade Média</div><div class="kpi-value" id="kpi-rh-val">—</div><div class="kpi-sub">Umidade Relativa do Ar</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌧️</div><div class="kpi-body"><div class="kpi-label">Precipitação Total</div><div class="kpi-value" id="kpi-precip-val">—</div><div class="kpi-sub">Período selecionado</div></div></div>
     <div class="kpi-card"><div class="kpi-icon">🌿</div><div class="kpi-body"><div class="kpi-label">ETo Médio</div><div class="kpi-value" id="kpi-et-val">—</div><div class="kpi-sub">Evapotranspiração (mm/dia)</div></div></div>
-    <div class="kpi-card kpi-card-wind" title="Velocidade do vento no período: média geral e mínima/máxima das médias diárias por estação.">
+    <div class="kpi-card kpi-card-wind" title="Velocidade do vento no período: média geral, mínima e máxima (rajada). Arable: wind_speed_min/max; Davis: menor média de intervalo e maior rajada (wind_speed_hi).">
       <div class="kpi-icon">🌬️</div>
       <div class="kpi-body">
         <div class="kpi-label">Vento Médio</div>
@@ -114,7 +114,7 @@
         </div>
         <div class="kpi-minmax">
           <span class="kpi-chip"><span class="kpi-chip-label">Mín</span><strong id="kpi-wind-min">—</strong></span>
-          <span class="kpi-chip"><span class="kpi-chip-label">Máx</span><strong id="kpi-wind-max">—</strong></span>
+          <span class="kpi-chip" title="Rajada máxima do período"><span class="kpi-chip-label">Máx</span><strong id="kpi-wind-max">—</strong></span>
         </div>
       </div>
     </div>
@@ -174,7 +174,7 @@
       <div class="chart-wrap"><canvas id="chartGDU"></canvas></div>
     </div>
     <div class="chart-card">
-      <div class="chart-header"><span class="chart-title">🌬️ Velocidade do Vento (m/s)</span><span class="chart-subtitle">Média diária por estação</span></div>
+      <div class="chart-header"><span class="chart-title">🌬️ Velocidade do Vento (m/s)</span><span class="chart-subtitle" id="chartWindSub">Média diária por estação</span></div>
       <div class="chart-wrap"><canvas id="chartWind"></canvas></div>
     </div>
   </div>
@@ -190,7 +190,7 @@
             <th>Dispositivo</th><th>Site</th><th>Cidade</th><th>UF</th>
             <th id="thTempMean">T. Média (°C)</th><th id="thTempMax">T. Max (°C)</th><th id="thTempMin">T. Min (°C)</th><th id="thGDU">GDU Acum. (°C·dia)</th>
             <th>UR (%)</th><th>Precip (mm)</th><th>ETo (mm)</th>
-            <th>Vento Méd. (m/s)</th><th>Vento Mín. (m/s)</th><th>Vento Máx. (m/s)</th><th>Dir. Vento</th><th>VPD (kPa)</th>
+            <th>Vento Méd. (m/s)</th><th>Vento Mín. (m/s)</th><th>Rajada Máx. (m/s)</th><th>Dir. Vento</th><th>VPD (kPa)</th>
             <th>SWDW (MJ/m²)</th><th>NDVI</th><th>Latitude</th><th>Longitude</th>
           </tr>
         </thead>

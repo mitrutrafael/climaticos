@@ -45,9 +45,22 @@ class TestAggregation:
         assert row["precip"] == 8.0
         assert row["et"] == 6.3  # (0.1 + 0.15) in → mm, banker's rounding
         assert row["wind_speed"] == 1.8  # 4 mph ≈ 1.78816 → round1 = 1.8
+        assert row["wind_speed_max"] is None  # sem wind_speed_hi nos registros
+        assert row["wind_speed_min"] == 1.8
         assert row["wind_dir"] == "E"
-        assert row["swdw"] == 250.0
+        assert row["swdw"] == 21.6  # 250 W/m² × 0,0864 = 21,6 MJ/m²·dia
         assert row["vpd"] is not None
+
+    def test_wind_max_min(self):
+        records = [
+            _rec(wind_speed_avg=2.0, wind_speed_hi=10.0),
+            _rec(wind_speed_avg=6.0, wind_speed_hi=22.0),
+            _rec(wind_speed_avg=4.0, wind_speed_hi=None),
+        ]
+        row = aggregate_davis_records(records).iloc[0]
+        assert row["wind_speed"] == 1.8       # média 4 mph
+        assert row["wind_speed_max"] == 9.8   # 22 mph ≈ 9.835 m/s (rajada)
+        assert row["wind_speed_min"] == 0.9   # 2 mph ≈ 0.894 m/s
 
     def test_multiple_stations_separated(self):
         records = [
@@ -63,6 +76,7 @@ class TestAggregation:
         assert df.empty
         assert df.columns.tolist() == [
             "device", "site", "city", "state", "date", "tair_mean", "tair_max",
-            "tair_min", "rh_mean", "precip", "et", "wind_speed", "wind_dir",
+            "tair_min", "rh_mean", "precip", "et", "wind_speed", "wind_speed_max",
+            "wind_speed_min", "wind_dir",
             "vpd", "swdw", "ndvi", "lat", "lon",
         ]

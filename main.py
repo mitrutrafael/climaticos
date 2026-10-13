@@ -10,7 +10,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import date
+from datetime import UTC, date, datetime
 
 from climaticos.config import default_date_range, load_config
 from climaticos.logging_setup import setup_logging
@@ -60,8 +60,12 @@ def main(argv: list[str] | None = None) -> int:
         logger.error(exc)
         return 1
 
-    if args.start and args.end:
-        start, end = args.start, args.end
+    if args.start:
+        start = args.start
+        end = args.end or datetime.now(UTC).date()
+        if end < start:
+            logger.error("--end (%s) anterior a --start (%s)", end, start)
+            return 1
     else:
         start, end = default_date_range(days=args.days)
         logger.info("Período padrão: %s a %s (%d dias)", start, end, (end - start).days)

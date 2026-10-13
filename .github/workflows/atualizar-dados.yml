@@ -3,7 +3,21 @@ name: Atualizar Dados Climáticos
 on:
   schedule:
     - cron: '0 6 * * *'  # Diariamente às 06:00 UTC (03:00 BRT)
-  workflow_dispatch:     # Permite execução manual
+  workflow_dispatch:     # Permite execução manual (e backfill do histórico)
+    inputs:
+      start:
+        description: 'Data inicial YYYY-MM-DD (vazio = últimos 30 dias)'
+        required: false
+        default: ''
+      end:
+        description: 'Data final YYYY-MM-DD (vazio = hoje)'
+        required: false
+        default: ''
+      source:
+        description: 'Fonte de dados'
+        type: choice
+        options: [todas, arable, davis]
+        default: todas
 
 permissions:
   contents: write
@@ -34,8 +48,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e .
 
-      - name: Executar pipeline ETL (últimos 30 dias)
-        run: python main.py --days 30 --log-level INFO
+      - name: Executar pipeline ETL
+        env:
+          START: ${{ github.event.inputs.start }}
+          END: ${{ github.event.inputs.end }}
+          SOURCE: ${{ github.event.inputs.source }}
+        run: |
+          args=(--log-level INFO)
+          if [ -n "$START" ]; then
+            args+=(--start "$START")
+            if [ -n "$END" ]; then args+=(--end "$END"); fi
+          else
+            args+=(--days 30)
+          fi
+          case "$SOURCE" in
+            arable) args+=(--arable-only) ;;
+            davis)  args+=(--davis-only) ;;
+          esac
+          python main.py "${args[@]}"
 
       - name: Verificar mudanças
         id: changes

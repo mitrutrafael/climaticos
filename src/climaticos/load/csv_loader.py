@@ -53,7 +53,8 @@ def upsert(df_new: pd.DataFrame, path: str | Path) -> pd.DataFrame:
 
     merged = merged.drop_duplicates(subset=["device", "date"], keep="last")
     merged = merged.sort_values(["device", "date"]).reset_index(drop=True)
-    merged = merged[list(OUTPUT_COLUMNS)]
+    # reindex: CSVs antigos sem colunas novas (ex.: wind_speed_max) ficam com NaN
+    merged = merged.reindex(columns=list(OUTPUT_COLUMNS))
     return merged
 
 

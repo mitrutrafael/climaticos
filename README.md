@@ -107,9 +107,11 @@ O pipeline segue o padrão **extract → transform → load**, com os CSVs servi
 | `precip` | mm | Precipitação total diária |
 | `et` | mm/dia | Evapotranspiração de referência (ETo) |
 | `wind_speed` | m/s | Velocidade média do vento |
+| `wind_speed_max` | m/s | Velocidade máxima / rajada do dia (Arable: `wind_speed_max`; Davis: maior `wind_speed_hi`) |
+| `wind_speed_min` | m/s | Velocidade mínima do dia (Arable: `wind_speed_min`; Davis: menor média de intervalo) |
 | `wind_dir` | — | Direção predominante do vento |
 | `vpd` | kPa | Déficit de Pressão de Vapor |
-| `swdw` | W/m² | Radiação solar incidente |
+| `swdw` | MJ/m²·dia | Radiação solar incidente (Davis: média de W/m² × 0,0864) |
 | `ndvi` | — | Índice de Vegetação por Diferença Normalizada |
 | `gdu` | °C·dia / °F·dia | Graus-Dia de Desenvolvimento — calculado no browser (ver seção abaixo), não persistido no CSV |
 
@@ -197,7 +199,7 @@ python main.py --log-level DEBUG
 
 | Workflow | Gatilho | Ação |
 |----------|---------|------|
-| `atualizar-dados.yml` | 06:00 UTC diário + manual | Roda o ETL e faz commit/push dos CSVs |
+| `atualizar-dados.yml` | 06:00 UTC diário + manual | Roda o ETL (últimos 30 dias, ou o período informado) e faz commit/push dos CSVs |
 | `deploy-pages.yml` | push no `main` | Publica o site no GitHub Pages |
 | `ci.yml` | push/PR | Lint (ruff) + testes (pytest) |
 
@@ -208,6 +210,15 @@ python main.py --log-level DEBUG
 - `DAVIS_API_SECRET`
 
 Configure em **Settings → Secrets and variables → Actions**.
+
+### Reprocessar histórico (backfill)
+
+Em **Actions → Atualizar Dados Climáticos → Run workflow**, informe `start` (e opcionalmente `end` e a fonte)
+no formato `YYYY-MM-DD`. Ou pela CLI:
+
+```bash
+gh workflow run atualizar-dados.yml -f start=2024-08-01 -f source=arable
+```
 
 ---
 

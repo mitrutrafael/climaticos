@@ -88,6 +88,8 @@ class ArableExtractor:
                     "precip": item.get("precip"),
                     "et": item.get("et"),
                     "wind_speed": item.get("wind_speed"),
+                    "wind_speed_max": item.get("wind_speed_max"),
+                    "wind_speed_min": item.get("wind_speed_min"),
                     "wind_dir": item.get("wind_direction"),
                     "vpd": item.get("vpd"),
                     "swdw": item.get("swdw"),
