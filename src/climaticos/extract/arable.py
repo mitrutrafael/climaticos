@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from typing import Any
 
 import pandas as pd
@@ -14,6 +14,8 @@ from .base import ResilientClient
 logger = get_logger("extract.arable")
 
 _LIMIT = 2000
+# A API devolve no máximo ~731 dias por consulta; janelas de 1 ano evitam truncar o período
+_WINDOW_DAYS = 365
 
 
 class ArableExtractor:
@@ -45,7 +47,27 @@ class ArableExtractor:
         return {"Authorization": f"Apikey {self.api_key}"}
 
     def fetch_station(self, station: Station, start: date, end: date) -> list[dict[str, Any]]:
-        """Busca e mapeia os registros diários de uma única estação.
+        """Busca os registros diários de uma estação, em janelas de até 1 ano.
+
+        Args:
+            station: Estação Arable.
+            start: Data inicial (inclusive).
+            end: Data final (inclusive).
+
+        Returns:
+            Lista de dicionários no schema ``OUTPUT_COLUMNS``, sem datas repetidas.
+        """
+        by_date: dict[str, dict[str, Any]] = {}
+        window_start = start
+        while window_start <= end:
+            window_end = min(window_start + timedelta(days=_WINDOW_DAYS), end)
+            for row in self._fetch_window(station, window_start, window_end):
+                by_date[row["date"]] = row
+            window_start = window_end + timedelta(days=1)
+        return [by_date[d] for d in sorted(by_date)]
+
+    def _fetch_window(self, station: Station, start: date, end: date) -> list[dict[str, Any]]:
+        """Busca e mapeia os registros diários de uma estação em uma janela.
 
         Args:
             station: Estação Arable.
