@@ -184,6 +184,32 @@ body {
   transform: translateY(0) scale(0.98);
 }
 
+/* ---- NASA POWER: toggle + tabela comparativa ---- */
+.toggle-nasa {
+  display: inline-flex; align-items: center; gap: 8px; align-self: flex-end;
+  padding: 8px 12px; border-radius: 8px; cursor: pointer; user-select: none;
+  background: var(--bg3); border: 1px solid var(--border);
+  font-size: 0.82rem; font-weight: 600; color: var(--muted);
+}
+.toggle-nasa input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle-track {
+  width: 30px; height: 16px; border-radius: 999px; position: relative;
+  background: rgba(255,255,255,0.12); transition: background 0.2s;
+}
+.toggle-thumb {
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--muted); transition: transform 0.2s, background 0.2s;
+}
+.toggle-nasa input:checked + .toggle-track { background: rgba(226,232,240,0.35); }
+.toggle-nasa input:checked + .toggle-track .toggle-thumb { transform: translateX(14px); background: #e2e8f0; }
+.toggle-nasa:has(input:checked) { color: var(--text); border-color: rgba(226,232,240,0.45); }
+.toggle-nasa input:focus-visible + .toggle-track { outline: 2px solid var(--accent1); outline-offset: 2px; }
+.table-section[hidden] { display: none; }
+#nasaSection { padding-bottom: 0; }
+.table-card-nasa { border-color: rgba(226,232,240,0.18); }
+td.delta { color: var(--muted); }
+td.delta-warn { color: var(--accent4); font-weight: 700; }
+
 /* ---- CHARTS SECTION ---- */
 .charts-section { padding: 20px 32px 0; }
 

@@ -11,6 +11,7 @@ from .config import Config
 from .extract.arable import ArableExtractor
 from .extract.base import ResilientClient
 from .extract.davis import DavisExtractor
+from .extract.nasa_power import NasaPowerExtractor
 from .load.csv_loader import upsert, write_csv_atomic
 from .logging_setup import get_logger
 from .transform.daily import aggregate_davis_records
@@ -27,12 +28,16 @@ class PipelineResult:
         davis_rows: Linhas Davis consolidadas no período.
         arable_total: Total de linhas no CSV Arable após merge.
         davis_total: Total de linhas no CSV Davis após merge.
+        nasa_rows: Linhas NASA POWER atualizadas no período.
+        nasa_total: Total de linhas no CSV NASA POWER após merge.
     """
 
     arable_rows: int
     davis_rows: int
     arable_total: int
     davis_total: int
+    nasa_rows: int = 0
+    nasa_total: int = 0
 
 
 class Pipeline:
@@ -42,13 +47,16 @@ class Pipeline:
         config: Configuração com chaves de API e parâmetros.
         arable_path: Caminho do CSV Arable.
         davis_path: Caminho do CSV Davis.
+        nasa_path: Caminho do CSV NASA POWER (série de comparação).
     """
 
     def __init__(self, config: Config, arable_path: str = "dados_climaticos_brasil.csv",
-                 davis_path: str = "dados_davis_brasil.csv") -> None:
+                 davis_path: str = "dados_davis_brasil.csv",
+                 nasa_path: str = "dados_nasa_power.csv") -> None:
         self.config = config
         self.arable_path = arable_path
         self.davis_path = davis_path
+        self.nasa_path = nasa_path
 
     def _run_arable(self, start: date, end: date) -> pd.DataFrame:
         """Extrai, transforma e consolida o CSV Arable."""
@@ -92,7 +100,25 @@ class Pipeline:
         write_csv_atomic(merged, self.davis_path)
         return daily
 
-    def run(self, start: date, end: date, arable: bool = True, davis: bool = True) -> PipelineResult:
+    def _run_nasa(self, start: date, end: date) -> pd.DataFrame:
+        """Coleta a NASA POWER nas coordenadas de todas as estações e consolida o CSV."""
+        with ResilientClient(
+            timeout=self.config.nasa_power_timeout,
+            max_retries=self.config.max_retries,
+            backoff=self.config.retry_backoff,
+        ) as client:
+            extractor = NasaPowerExtractor(
+                stations=self.config.arable_stations + self.config.davis_stations,
+                base_url=self.config.nasa_power_url,
+                client=client,
+            )
+            df = extractor.fetch_all(start, end)
+        merged = upsert(df, self.nasa_path)
+        write_csv_atomic(merged, self.nasa_path)
+        return df
+
+    def run(self, start: date, end: date, arable: bool = True, davis: bool = True,
+            nasa: bool = True) -> PipelineResult:
         """Executa o pipeline para o período informado.
 
         Args:
@@ -101,12 +127,14 @@ class Pipeline:
                 Arable inclui o dia completo.
             arable: Coletar/atualizar a Arable.
             davis: Coletar/atualizar a Davis.
+            nasa: Coletar/atualizar a série de comparação NASA POWER.
 
         Returns:
             ``PipelineResult`` com resumo das linhas atualizadas e totais.
         """
         arable_df = pd.DataFrame()
         davis_df = pd.DataFrame()
+        nasa_df = pd.DataFrame()
 
         if arable:
             arable_df = self._run_arable(start, end)
@@ -114,6 +142,9 @@ class Pipeline:
         if davis:
             davis_df = self._run_davis(start, end)
             logger.info("Davis atualizado: %d linhas diárias no período", len(davis_df))
+        if nasa:
+            nasa_df = self._run_nasa(start, end)
+            logger.info("NASA POWER atualizado: %d linhas no período", len(nasa_df))
 
         def _count(path: str) -> int:
             try:
@@ -127,6 +158,8 @@ class Pipeline:
             davis_rows=len(davis_df),
             arable_total=_count(self.arable_path),
             davis_total=_count(self.davis_path),
+            nasa_rows=len(nasa_df),
+            nasa_total=_count(self.nasa_path),
         )
         logger.info(
             "Pipeline concluído: Arable +%d (total %d) | Davis +%d (total %d)",
@@ -136,6 +169,7 @@ class Pipeline:
         return result
 
 
-def run_pipeline(config: Config, start: date, end: date, arable: bool = True, davis: bool = True) -> PipelineResult:
+def run_pipeline(config: Config, start: date, end: date, arable: bool = True, davis: bool = True,
+                 nasa: bool = True) -> PipelineResult:
     """Atalho para construir e executar o pipeline em uma chamada."""
-    return Pipeline(config=config).run(start=start, end=end, arable=arable, davis=davis)
+    return Pipeline(config=config).run(start=start, end=end, arable=arable, davis=davis, nasa=nasa)

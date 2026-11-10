@@ -45,6 +45,8 @@ def build_parser() -> argparse.ArgumentParser:
                         help="Atualizar apenas o CSV Arable.")
     source.add_argument("--davis-only", action="store_true",
                         help="Atualizar apenas o CSV Davis.")
+    source.add_argument("--nasa-only", action="store_true",
+                        help="Atualizar apenas o CSV de comparação NASA POWER.")
     return parser
 
 
@@ -54,8 +56,13 @@ def main(argv: list[str] | None = None) -> int:
     setup_logging(getattr(logging, args.log_level))
     logger = logging.getLogger("climaticos.cli")
 
+    only = args.arable_only or args.davis_only or args.nasa_only
+    arable = args.arable_only or not only
+    davis = args.davis_only or not only
+    nasa = args.nasa_only or not only
+
     try:
-        config = load_config()
+        config = load_config(arable=arable, davis=davis)
     except RuntimeError as exc:
         logger.error(exc)
         return 1
@@ -70,19 +77,18 @@ def main(argv: list[str] | None = None) -> int:
         start, end = default_date_range(days=args.days)
         logger.info("Período padrão: %s a %s (%d dias)", start, end, (end - start).days)
 
-    arable = not args.davis_only
-    davis = not args.arable_only
-
     try:
-        result = run_pipeline(config, start, end, arable=arable, davis=davis)
+        result = run_pipeline(config, start, end, arable=arable, davis=davis, nasa=nasa)
     except Exception:
         logger.exception("Pipeline falhou")
         return 1
 
     logger.info(
-        "OK. Arable: %d linhas no período (total %d) · Davis: %d linhas no período (total %d)",
+        "OK. Arable: %d linhas no período (total %d) · Davis: %d linhas no período (total %d)"
+        " · NASA POWER: %d linhas no período (total %d)",
         result.arable_rows, result.arable_total,
         result.davis_rows, result.davis_total,
+        result.nasa_rows, result.nasa_total,
     )
     return 0
 

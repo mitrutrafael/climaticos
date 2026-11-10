@@ -78,6 +78,11 @@
         <option value="F">°F · Fahrenheit</option>
       </select>
     </div>
+    <label class="toggle-nasa" title="Sobrepõe a série NASA POWER (satélite/modelo) nas coordenadas de cada estação">
+      <input type="checkbox" id="nasaCompare" />
+      <span class="toggle-track" aria-hidden="true"><span class="toggle-thumb"></span></span>
+      <span>Comparar NASA POWER</span>
+    </label>
     <button class="btn-apply" id="applyFilter">Aplicar</button>
     <button class="btn-reset" id="resetFilter">Resetar</button>
     <button class="btn-refresh" id="refreshBtn" title="Buscar dados mais recentes agora">↻ Atualizar</button>
@@ -180,6 +185,27 @@
   </div>
 </section>
 
+<section class="table-section" id="nasaSection" hidden>
+  <div class="table-card table-card-nasa">
+    <div class="chart-header"><span class="chart-title">🛰️ Comparativo Estação × NASA POWER</span><span class="chart-subtitle" id="nasaNote"></span></div>
+    <div class="table-wrap">
+      <table id="nasaTable">
+        <thead>
+          <tr>
+            <th>Dispositivo</th><th>Cidade</th><th>Dias</th>
+            <th>Chuva (mm) Est. / NASA</th><th>Δ Chuva</th>
+            <th id="thNasaTemp">T. Média (°C) Est. / NASA</th><th>Δ Temp.</th>
+            <th>Radiação (MJ/m²) Est. / NASA</th><th>Δ Rad.</th>
+            <th>Vento (m/s) Est. / NASA</th><th>Δ Vento</th>
+            <th>ETo (mm/dia) Est. / NASA</th><th>Δ ETo</th>
+          </tr>
+        </thead>
+        <tbody id="nasaTableBody"></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
 <section class="table-section">
   <div class="table-card">
     <div class="chart-header"><span class="chart-title">📋 Estações Monitoradas</span><span class="chart-subtitle">Resumo por dispositivo</span></div>
@@ -201,7 +227,7 @@
 </section>
 
 <footer class="footer">
-  <p>Dados consolidados: <strong>Pipeline ETL Python</strong> (Arable Cloud + WeatherLink v2) · Atualização diária automática · Estações Brasil · Agrometeorologia Vylor</p>
+  <p>Dados consolidados: <strong>Pipeline ETL Python</strong> (Arable Cloud + WeatherLink v2) · Comparação: <strong>NASA POWER</strong> (LaRC) · Atualização diária automática · Estações Brasil · Agrometeorologia Vylor</p>
 </footer>
 
 <script src="app.js"></script>

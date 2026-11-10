@@ -31,6 +31,19 @@ def _localtime(ts: int | None, tz_offset: int | None) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
+# Faixa física aceita para temperatura do ar (°C). Fora dela é leitura inválida,
+# ex.: −90 °F (−67,8 °C) que o console Davis envia com o sensor desconectado.
+_TEMP_RANGE_C = (-40.0, 60.0)
+
+
+def _temp_c(fahrenheit: Any) -> float | None:
+    """Converte °F → °C descartando leituras fora da faixa física."""
+    c = fahrenheit_to_celsius(fahrenheit)
+    if c is None or not _TEMP_RANGE_C[0] <= c <= _TEMP_RANGE_C[1]:
+        return None
+    return c
+
+
 def _mean(values: Iterable[Any]) -> float | None:
     """Média dos valores numéricos (ignora ``None``); ``None`` se vazio."""
     nums = [float(v) for v in values if v is not None]
@@ -98,11 +111,11 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]], min_hours: int = 
                 logger.warning("Davis %s %s incompleto (%d h de dados) — ignorado", device, day, len(hours))
                 continue
         first = group[0]
-        temps_c = [fahrenheit_to_celsius(r.get("temp_out")) for r in group]
+        temps_c = [_temp_c(r.get("temp_out")) for r in group]
         rh = [r.get("hum_out") for r in group]
         t_mean = round1(_mean(temps_c))
-        t_max_values = [fahrenheit_to_celsius(r.get("temp_out_hi")) for r in group if r.get("temp_out_hi") is not None]
-        t_min_values = [fahrenheit_to_celsius(r.get("temp_out_lo")) for r in group if r.get("temp_out_lo") is not None]
+        t_max_values = [t for t in (_temp_c(r.get("temp_out_hi")) for r in group) if t is not None]
+        t_min_values = [t for t in (_temp_c(r.get("temp_out_lo")) for r in group) if t is not None]
         t_max = round1(max(t_max_values)) if t_max_values else None
         t_min = round1(min(t_min_values)) if t_min_values else None
         rh_mean = round1(_mean(rh))

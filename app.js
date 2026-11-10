@@ -7,6 +7,10 @@
 
 const REFRESH_INTERVAL_MS = 30 * 60 * 1000; // re-lê os CSVs a cada 30 min
 const CSV_SOURCES = ['dados_climaticos_brasil.csv', 'dados_davis_brasil.csv'];
+const NASA_CSV = 'dados_nasa_power.csv';
+const NASA_COMPARE_KEY = 'climaticos:nasaCompare';
+const NASA_COLOR = '#e2e8f0';
+const NASA_LABEL = 'NASA POWER';
 
 const PALETTE = ['#38bdf8','#818cf8','#34d399','#fb923c','#f472b6','#facc15','#a78bfa','#22d3ee'];
 const CHART_DEFAULTS = {
@@ -53,6 +57,14 @@ let refreshTimer = null;
 let lastUpdate = null;
 let dateRange = { min: '', max: '' };
 let loading = false;
+// Série de comparação NASA POWER (mesmas estações/coordenadas) e pares estação·dia
+let nasaData = [];
+let nasaFiltered = [];
+let nasaCompare = false;
+try { nasaCompare = localStorage.getItem(NASA_COMPARE_KEY) === '1'; } catch (e) { /* storage indisponível */ }
+// ?nasa=1 / ?nasa=0 na URL tem prioridade (links compartilháveis)
+const nasaParam = new URLSearchParams(location.search).get('nasa');
+if (nasaParam === '1' || nasaParam === '0') nasaCompare = nasaParam === '1';
 
 /* ==========================================
    CARGA DE DADOS — CSVs consolidados
@@ -90,6 +102,13 @@ async function loadFromCSV(toastMsg = '📊 Dados carregados do pipeline ETL.') 
     const data = sources.flat().filter(r => r.device && r.date);
     if (!data.length) throw new Error('CSVs sem registros');
     rawData = data;
+    // NASA POWER é opcional: falha na carga não impede o dashboard
+    try {
+      nasaData = (await parseCSV(cachedUrl(NASA_CSV))).map(normalize).filter(r => r.device && r.date);
+    } catch (err) {
+      console.warn('NASA POWER indisponível:', err);
+      nasaData = [];
+    }
     lastUpdate = new Date();
     setLoadingState(false);
     updateLastUpdateBadge();
@@ -216,6 +235,14 @@ function bindControls() {
     tempUnitSel.dispatchEvent(new Event('change'));
   });
 
+  const nasaToggle = document.getElementById('nasaCompare');
+  nasaToggle.checked = nasaCompare;
+  nasaToggle.addEventListener('change', () => {
+    nasaCompare = nasaToggle.checked;
+    try { localStorage.setItem(NASA_COMPARE_KEY, nasaCompare ? '1' : '0'); } catch (e) { /* ignora */ }
+    renderAll();
+  });
+
   document.getElementById('applyFilter').addEventListener('click', applyFilters);
   document.getElementById('resetFilter').addEventListener('click', () => {
     document.getElementById('stationFilter').value = 'all';
@@ -244,6 +271,10 @@ function applyFilters() {
     if (endDate   && r.date > endDate)   return false;
     return true;
   });
+
+  // Comparação justa: só os mesmos pares estação·dia presentes nos dados das estações
+  const pairs = new Set(filteredData.map(r => r.device + '|' + r.date));
+  nasaFiltered = nasaData.filter(r => pairs.has(r.device + '|' + r.date));
 
   updateKPIs();
   renderAll();
@@ -497,6 +528,24 @@ function renderAll() {
   renderTempChart(); renderPrecipChart(); renderRHChart();
   renderETChart(); renderVPDChart(); renderCompareChart();
   renderGDUChart(); renderWindChart(); renderSWDWChart(); renderTable();
+  renderNasaTable();
+}
+
+/* Série NASA POWER (tracejada) alinhada às datas do gráfico; [] se a comparação estiver desligada */
+function nasaSeries(labels, key, label, { fn = 'avg', map = v => v, type } = {}) {
+  if (!nasaCompare || !nasaFiltered.length) return [];
+  const byDate = groupBy(nasaFiltered, 'date');
+  const data = labels.map(d => {
+    const vals = values(byDate.get(d) || [], key);
+    if (!vals.length) return null;
+    const total = vals.reduce((a, b) => a + b, 0);
+    return map(fn === 'sum' ? total : total / vals.length);
+  });
+  const ds = { label: `${NASA_LABEL} · ${label}`, data, borderColor: NASA_COLOR,
+    backgroundColor: 'rgba(226,232,240,0.35)', borderDash: [5, 4], borderWidth: 1.5,
+    tension: 0.3, fill: false, pointRadius: 0, spanGaps: true };
+  if (type) ds.type = type;
+  return [ds];
 }
 
 function renderTempChart() {
@@ -507,6 +556,7 @@ function renderTempChart() {
     { label: `T. Máx (${u})`, data: inUnit('tair_max'), borderColor: '#fb923c', tension:0.3, fill:false, pointRadius:0 },
     { label: `T. Média (${u})`, data: inUnit('tair_mean'), borderColor: '#38bdf8', tension:0.3, fill:false, pointRadius:0 },
     { label: `T. Mín (${u})`, data: inUnit('tair_min'), borderColor: '#818cf8', backgroundColor:'rgba(129,140,248,0.08)', tension:0.3, fill:'-1', pointRadius:0 },
+    ...nasaSeries(labels, 'tair_mean', `T. Média (${u})`, { map: toUnit }),
   ], u);
 }
 
@@ -515,40 +565,52 @@ function renderPrecipChart() {
   const precip = aggregateByDate(filteredData, 'precip', 'sum');
   makeBarChart('chartPrecip', labels, [{ label:'Precipitação (mm)', data:precip,
     backgroundColor: precip.map(v => v > 0 ? 'rgba(56,189,248,0.75)' : 'rgba(56,189,248,0.15)'),
-    borderColor:'#38bdf8', borderWidth:1, borderRadius:3 }]);
+    borderColor:'#38bdf8', borderWidth:1, borderRadius:3 },
+    ...nasaSeries(labels, 'precip', 'Precipitação (mm)', { fn: 'sum', type: 'line' })]);
 }
 
 function renderRHChart() {
   const labels = getDateLabels(filteredData);
   makeLineChart('chartRH', labels, [{ label:'UR (%)', data:aggregateByDate(filteredData,'rh_mean'),
-    borderColor:'#34d399', backgroundColor:'rgba(52,211,153,0.1)', fill:true, tension:0.3, pointRadius:0 }], '%');
+    borderColor:'#34d399', backgroundColor:'rgba(52,211,153,0.1)', fill:true, tension:0.3, pointRadius:0 },
+    ...nasaSeries(labels, 'rh_mean', 'UR (%)')], '%');
 }
 
 function renderETChart() {
   const labels = getDateLabels(filteredData);
   makeLineChart('chartET', labels, [{ label:'ETo (mm/dia)', data:aggregateByDate(filteredData,'et'),
-    borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,0.1)', fill:true, tension:0.3, pointRadius:0 }], 'mm/dia');
+    borderColor:'#a78bfa', backgroundColor:'rgba(167,139,250,0.1)', fill:true, tension:0.3, pointRadius:0 },
+    ...nasaSeries(labels, 'et', 'ETo Hargreaves (mm/dia)')], 'mm/dia');
 }
 
 function renderVPDChart() {
   const labels = getDateLabels(filteredData);
   makeLineChart('chartVPD', labels, [{ label:'VPD (kPa)', data:aggregateByDate(filteredData,'vpd'),
-    borderColor:'#facc15', backgroundColor:'rgba(250,204,21,0.1)', fill:true, tension:0.3, pointRadius:0 }], 'kPa');
+    borderColor:'#facc15', backgroundColor:'rgba(250,204,21,0.1)', fill:true, tension:0.3, pointRadius:0 },
+    ...nasaSeries(labels, 'vpd', 'VPD (kPa)')], 'kPa');
 }
 
 function renderSWDWChart() {
   const labels = getDateLabels(filteredData);
   makeLineChart('chartSWDW', labels, [{ label:'Radiação Solar (MJ/m²)', data:aggregateByDate(filteredData,'swdw'),
-    borderColor:'#fb923c', backgroundColor:'rgba(251,146,60,0.1)', fill:true, tension:0.3, pointRadius:0 }], 'MJ/m²');
+    borderColor:'#fb923c', backgroundColor:'rgba(251,146,60,0.1)', fill:true, tension:0.3, pointRadius:0 },
+    ...nasaSeries(labels, 'swdw', 'Radiação (MJ/m²)')], 'MJ/m²');
 }
 
 function renderCompareChart() {
   const stations = [...new Set(filteredData.map(r => r.device))].sort();
   const labels   = stations.map(s => { const i = filteredData.find(r=>r.device===s); return `${s}\n${i.city}`; });
   const means    = stations.map(s => toUnit(avg(filteredData.filter(r=>r.device===s),'tair_mean')));
-  makeBarChart('chartCompare', labels, [{ label:`T. Média (${tempUnitLabel()})`, data:means,
+  const datasets = [{ label:`T. Média (${tempUnitLabel()})`, data:means,
     backgroundColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]+'99'),
-    borderColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1.5, borderRadius:6 }]);
+    borderColor: stations.map((_,i)=>PALETTE[i%PALETTE.length]), borderWidth:1.5, borderRadius:6 }];
+  if (nasaCompare && nasaFiltered.length) {
+    const nasaBy = groupBy(nasaFiltered, 'device');
+    datasets.push({ label:`${NASA_LABEL} · T. Média (${tempUnitLabel()})`,
+      data: stations.map(s => toUnit(avg(nasaBy.get(s) || [], 'tair_mean'))),
+      backgroundColor:'rgba(226,232,240,0.25)', borderColor:NASA_COLOR, borderWidth:1.5, borderRadius:6 });
+  }
+  makeBarChart('chartCompare', labels, datasets);
 }
 
 function renderGDUChart() {
@@ -664,6 +726,7 @@ function renderWindChart() {
       { label:'Máx / rajada (m/s)', data:series(windMax), borderColor:'#fb923c', tension:0.3, fill:false, pointRadius:0, borderWidth:1.5 },
       { label:'Média (m/s)', data:series(rows => avg(rows, 'wind_speed')), borderColor:'#38bdf8', tension:0.3, fill:false, pointRadius:0, borderWidth:1.5 },
       { label:'Mín (m/s)', data:series(windMin), borderColor:'#818cf8', backgroundColor:'rgba(129,140,248,0.08)', tension:0.3, fill:'-1', pointRadius:0, borderWidth:1.5 },
+      ...nasaSeries(labels, 'wind_speed', 'Média 2 m (m/s)'),
     ], 'm/s');
     return;
   }
@@ -675,6 +738,7 @@ function renderWindChart() {
       backgroundColor:'transparent', tension:0.3, pointRadius:0, borderWidth:1.5,
       data: labels.map(d => avg(byDate.get(d) || [], 'wind_speed')) };
   });
+  datasets.push(...nasaSeries(labels, 'wind_speed', 'Média 2 m (m/s)'));
   makeLineChart('chartWind', labels, datasets, 'm/s');
 }
 
@@ -713,6 +777,68 @@ function renderTable() {
       <td>${fmt(avg(d,'swdw'))}</td><td>${fmt(avg(d,'ndvi'),2)}</td>
       <td>${toNum(info.lat) != null ? Number(info.lat).toFixed(4) : '—'}</td>
       <td>${toNum(info.lon) != null ? Number(info.lon).toFixed(4) : '—'}</td>`;
+    tbody.appendChild(row);
+  });
+}
+
+/* Tabela Estação × NASA POWER — mesmos pares estação·dia; diferenças grandes destacadas */
+function pctDiff(station, nasa) {
+  if (station == null || nasa == null || nasa === 0) return null;
+  return (station - nasa) / Math.abs(nasa) * 100;
+}
+
+function deltaCell(station, nasa, dec, { pct = false, warn = Infinity } = {}) {
+  if (station == null || nasa == null) return '<td>—</td>';
+  const diff = pct ? pctDiff(station, nasa) : station - nasa;
+  if (diff == null) return '<td>—</td>';
+  const txt = (diff > 0 ? '+' : '') + fmt(diff, pct ? 0 : dec) + (pct ? ' %' : '');
+  return `<td class="${Math.abs(diff) >= warn ? 'delta-warn' : 'delta'}">${txt}</td>`;
+}
+
+function renderNasaTable() {
+  const section = document.getElementById('nasaSection');
+  if (!section) return;
+  section.hidden = !nasaCompare;
+  if (!nasaCompare) return;
+  const tbody = document.getElementById('nasaTableBody');
+  const note = document.getElementById('nasaNote');
+  tbody.innerHTML = '';
+  const u = tempUnitLabel();
+  document.getElementById('thNasaTemp').textContent = `T. Média (${u}) Est. / NASA`;
+
+  if (!nasaData.length) {
+    note.textContent = 'Dados NASA POWER ainda não disponíveis — execute o pipeline (fonte "nasa").';
+    return;
+  }
+  note.textContent = 'Comparação nos mesmos dias com dados da estação. NASA POWER: satélite/modelo em grade de ~50 km; '
+    + 'precipitação publicada com ~3 dias de atraso e radiação com ~7. ETo NASA por Hargreaves-Samani.';
+
+  const stations = [...new Set(filteredData.map(r => r.device))].sort();
+  const stBy = groupBy(filteredData, 'device');
+  const nasaBy = groupBy(nasaFiltered, 'device');
+  stations.forEach(s => {
+    const d = stBy.get(s);
+    const n = nasaBy.get(s) || [];
+    const nasaDates = new Set(n.map(r => r.date));
+    // chuva: soma só nos dias em que as duas fontes têm valor
+    const both = key => d.filter(r => nasaDates.has(r.date) && toNum(r[key]) != null);
+    const precipRows = both('precip');
+    const precipDates = new Set(precipRows.map(r => r.date));
+    const pSt = precipRows.length ? sum(precipRows, 'precip') : null;
+    const pNa = precipRows.length ? sum(n.filter(r => precipDates.has(r.date)), 'precip') : null;
+    const tSt = toUnit(avg(d, 'tair_mean')), tNa = toUnit(avg(n, 'tair_mean'));
+    const sSt = avg(d, 'swdw'), sNa = avg(n, 'swdw');
+    const wSt = avg(d, 'wind_speed'), wNa = avg(n, 'wind_speed');
+    const eSt = avg(d, 'et'), eNa = avg(n, 'et');
+    const pair = (a, b, dec = 1) => `<td>${fmt(a, dec)} / ${fmt(b, dec)}</td>`;
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>${escapeHTML(s)}</td><td>${escapeHTML(d[0].city)}</td><td>${n.length}</td>
+      ${pair(pSt, pNa)}${deltaCell(pSt, pNa, 1, { pct: true, warn: 30 })}
+      ${pair(tSt, tNa)}${deltaCell(tSt, tNa, 1, { warn: tempUnit === 'F' ? 3.6 : 2 })}
+      ${pair(sSt, sNa)}${deltaCell(sSt, sNa, 1, { pct: true, warn: 25 })}
+      ${pair(wSt, wNa)}${deltaCell(wSt, wNa, 1)}
+      ${pair(eSt, eNa)}${deltaCell(eSt, eNa, 1)}`;
     tbody.appendChild(row);
   });
 }

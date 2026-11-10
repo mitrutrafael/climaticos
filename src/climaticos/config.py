@@ -31,16 +31,26 @@ class Station:
 
 
 ARABLE_STATIONS: tuple[Station, ...] = (
-    Station(id=0, device="D009893", site="BO Fátima do Sul", city="Fátima do Sul", state="MS"),
-    Station(id=0, device="D009889", site="BF Toledo Area 2", city="Toledo", state="PR"),
-    Station(id=0, device="D009881", site="BH Indianopolis", city="Indianópolis", state="MG"),
-    Station(id=0, device="D006582", site="BW Mogi Mirim", city="Mogi Mirim", state="SP"),
-    Station(id=0, device="D006917", site="BC Planaltina", city="Planaltina", state="DF"),
-    Station(id=0, device="D006926", site="PC Sao Luiz Gonzaga", city="São Luiz Gonzaga", state="RS"),
-    Station(id=0, device="D006642", site="BL Ponta Grossa", city="Ponta Grossa", state="PR"),
-    Station(id=0, device="D009895", site="PC Cruz Alta", city="Cruz Alta", state="RS"),
-    Station(id=0, device="D009878", site="BM Sorriso", city="Sorriso", state="MT"),
-    Station(id=0, device="D009876", site="Corteva GPB BL", city="Ponta Grossa", state="PR"),
+    Station(id=0, device="D009893", site="BO Fátima do Sul", city="Fátima do Sul", state="MS",
+            lat=-22.3877, lon=-54.55024),
+    Station(id=0, device="D009889", site="BF Toledo Area 2", city="Toledo", state="PR",
+            lat=-24.64036, lon=-53.65754),
+    Station(id=0, device="D009881", site="BH Indianopolis", city="Indianópolis", state="MG",
+            lat=-18.95649, lon=-47.85953),
+    Station(id=0, device="D006582", site="BW Mogi Mirim", city="Mogi Mirim", state="SP",
+            lat=-22.44745, lon=-47.07167),
+    Station(id=0, device="D006917", site="BC Planaltina", city="Planaltina", state="DF",
+            lat=-15.72566, lon=-47.61028),
+    Station(id=0, device="D006926", site="PC Sao Luiz Gonzaga", city="São Luiz Gonzaga", state="RS",
+            lat=-28.40807, lon=-53.36504),
+    Station(id=0, device="D006642", site="BL Ponta Grossa", city="Ponta Grossa", state="PR",
+            lat=-25.5891, lon=-51.49222),
+    Station(id=0, device="D009895", site="PC Cruz Alta", city="Cruz Alta", state="RS",
+            lat=-28.61088, lon=-53.58847),
+    Station(id=0, device="D009878", site="BM Sorriso", city="Sorriso", state="MT",
+            lat=-12.41376, lon=-55.86997),
+    Station(id=0, device="D009876", site="Corteva GPB BL", city="Ponta Grossa", state="PR",
+            lat=-25.58877, lon=-51.4918),
 )
 
 DAVIS_STATIONS: tuple[Station, ...] = (
@@ -84,6 +94,8 @@ class Config:
         davis_api_secret: Segredo de assinatura da WeatherLink (``DAVIS_API_SECRET``).
         arable_url: URL base da Arable Cloud API.
         davis_url: URL base da WeatherLink v2.
+        nasa_power_url: Endpoint diário por ponto da NASA POWER (sem chave).
+        nasa_power_timeout: Timeout (s) da NASA POWER — séries longas demoram.
         davis_chunk_days: Janela em dias por chamada à API Davis (limitada a 24 h).
         davis_min_hours: Horas locais mínimas com dados para aceitar um dia Davis.
         request_timeout: Timeout em segundos por requisição HTTP.
@@ -99,6 +111,8 @@ class Config:
     davis_api_secret: str = field(default_factory=lambda: os.environ.get("DAVIS_API_SECRET", ""))
     arable_url: str = "https://api.arable.cloud/api/v2"
     davis_url: str = "https://api.weatherlink.com/v2"
+    nasa_power_url: str = "https://power.larc.nasa.gov/api/temporal/daily/point"
+    nasa_power_timeout: float = 120.0
     davis_chunk_days: int = 1
     davis_min_hours: int = 20
     request_timeout: float = 30.0
@@ -124,17 +138,19 @@ def default_date_range(days: int | None = None) -> tuple[date, date]:
     return start, end
 
 
-def load_config() -> Config:
+def load_config(arable: bool = True, davis: bool = True) -> Config:
     """Constrói e valida a configuração a partir do ambiente.
+
+    Só exige as chaves das fontes que serão coletadas (a NASA POWER não usa chave).
 
     Raises:
         RuntimeError: Se alguma chave de API obrigatória estiver ausente.
     """
     cfg = Config()
     missing = []
-    if not cfg.arable_api_key:
+    if arable and not cfg.arable_api_key:
         missing.append("ARABLE_API_KEY")
-    if not cfg.davis_api_key or not cfg.davis_api_secret:
+    if davis and (not cfg.davis_api_key or not cfg.davis_api_secret):
         missing.extend(x for x in ("DAVIS_API_KEY", "DAVIS_API_SECRET") if not getattr(cfg, x.lower()))
     if missing:
         raise RuntimeError(

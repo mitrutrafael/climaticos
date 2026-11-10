@@ -62,6 +62,20 @@ class TestAggregation:
         assert row["wind_speed_max"] == 9.8   # 22 mph ≈ 9.835 m/s (rajada)
         assert row["wind_speed_min"] == 0.9   # 2 mph ≈ 0.894 m/s
 
+    def test_disconnected_temp_sensor_ignored(self):
+        # −90 °F (−67,8 °C) = sensor desconectado no console Davis
+        records = [
+            _rec(temp_out=-90.0, temp_out_hi=-90.0, temp_out_lo=-90.0, hum_out=80),
+            _rec(temp_out=68.0, temp_out_hi=70.0, temp_out_lo=66.0, hum_out=80),
+        ]
+        row = aggregate_davis_records(records).iloc[0]
+        assert row["tair_mean"] == 20.0
+        assert row["tair_min"] == 18.9
+
+    def test_all_temps_invalid_become_none(self):
+        row = aggregate_davis_records([_rec(temp_out=-90.0, temp_out_hi=-90.0, temp_out_lo=-90.0)]).iloc[0]
+        assert row["tair_mean"] is None and row["tair_max"] is None and row["vpd"] is None
+
     def test_multiple_stations_separated(self):
         records = [
             _rec(device="DV13917", ts=pd.Timestamp("2026-07-01T12:00:00+00:00").timestamp()),

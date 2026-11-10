@@ -16,7 +16,7 @@ on:
       source:
         description: 'Fonte de dados'
         type: choice
-        options: [todas, arable, davis]
+        options: [todas, arable, davis, nasa]
         default: todas
 
 permissions:
@@ -64,13 +64,14 @@ jobs:
           case "$SOURCE" in
             arable) args+=(--arable-only) ;;
             davis)  args+=(--davis-only) ;;
+            nasa)   args+=(--nasa-only) ;;
           esac
           python main.py "${args[@]}"
 
       - name: Verificar mudanças
         id: changes
         run: |
-          if git status --porcelain | grep -qE "dados_(climaticos|davis)_brasil\.csv"; then
+          if git status --porcelain | grep -qE "dados_((climaticos|davis)_brasil|nasa_power)\.csv"; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           else
             echo "changed=false" >> "$GITHUB_OUTPUT"
@@ -81,6 +82,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add dados_climaticos_brasil.csv dados_davis_brasil.csv
+          git add dados_climaticos_brasil.csv dados_davis_brasil.csv dados_nasa_power.csv
           git commit -m "chore: atualiza dados climáticos $(date +%Y-%m-%d)"
           git push

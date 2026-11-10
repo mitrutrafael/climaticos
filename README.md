@@ -184,6 +184,7 @@ python main.py --start 2026-07-01 --end 2026-09-17
 # Apenas uma fonte
 python main.py --arable-only
 python main.py --davis-only
+python main.py --nasa-only   # série de comparação NASA POWER (não precisa de chave)
 
 # Log detalhado
 python main.py --log-level DEBUG
@@ -236,6 +237,26 @@ pytest
 
 - **Arable Cloud v2**: `https://api.arable.cloud/api/v2/` · `Authorization: Apikey <chave>`
 - **WeatherLink v2**: `https://api.weatherlink.com/v2/` · chave via query + `X-Api-Secret`
+- **NASA POWER** (comparação): `https://power.larc.nasa.gov/api/temporal/daily/point` · pública, sem chave
+
+### 🛰️ Comparativo NASA POWER
+
+`dados_nasa_power.csv` traz, no mesmo schema, a série diária da NASA POWER nas coordenadas de
+cada estação Arable e Davis. É só **comparação** — não altera os dados das estações.
+
+| Coluna | Parâmetro POWER (comunidade AG) |
+|--------|---------------------------------|
+| `tair_mean/max/min` | `T2M`, `T2M_MAX`, `T2M_MIN` |
+| `rh_mean` | `RH2M` |
+| `precip` | `PRECTOTCORR` |
+| `swdw` | `ALLSKY_SFC_SW_DWN` (MJ/m²·dia) |
+| `wind_speed/_max/_min` | `WS10M*` convertido para 2 m (FAO-56: × 0,748) |
+| `wind_dir` | `WD10M` |
+| `et` | ETo Hargreaves-Samani com `T2M*` e `TOA_SW_DWN` |
+| `vpd` | calculado de `T2M` e `RH2M` |
+
+Limitações: grade de ~0,5° (≈ 50 km); precipitação publicada com ~3 dias de atraso e radiação com ~7.
+O `WS2M` do POWER não é usado porque sai quase zero em células de rugosidade alta.
 
 ---
 
@@ -246,6 +267,9 @@ pytest
 - **KPIs**: Temperatura, GDU, Umidade, Precipitação, ETo, Vento, VPD, Radiação, NDVI
 - **9 gráficos interativos** (temperatura, precipitação, UR, ETo, VPD, radiação, comparativo, GDU, vento)
 - **Tabela resumo**: estatísticas agregadas por estação
+- **Comparar NASA POWER**: sobrepõe a série NASA (tracejada) nos gráficos e mostra a tabela
+  Estação × NASA com as diferenças (chuva > 30 %, radiação > 25 % e temperatura > 2 °C em destaque).
+  Também pode ser ligado pela URL: `?nasa=1`
 
 ---
 
