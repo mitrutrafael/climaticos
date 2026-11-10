@@ -67,11 +67,13 @@ class DavisExtractor:
         payload = self.client.get_json(url, headers=self._headers())
         records: list[dict[str, Any]] = []
         for sensor in payload.get("sensors", []) or []:
+            lsid = sensor.get("lsid")
             for rec in sensor.get("data", []) or []:
                 if not isinstance(rec, dict):
                     continue
                 records.append(
                     {
+                        "lsid": lsid,
                         "ts": rec.get("ts"),
                         "tz_offset": rec.get("tz_offset"),
                         "temp_out": rec.get("temp_out"),
@@ -79,6 +81,9 @@ class DavisExtractor:
                         "temp_out_lo": rec.get("temp_out_lo"),
                         "hum_out": rec.get("hum_out"),
                         "rainfall_mm": rec.get("rainfall_mm"),
+                        "rainfall_in": rec.get("rainfall_in"),
+                        "rainfall_clicks": rec.get("rainfall_clicks"),
+                        "rain_size": rec.get("rain_size"),
                         "et": rec.get("et"),
                         "wind_speed_avg": rec.get("wind_speed_avg"),
                         "wind_speed_hi": rec.get("wind_speed_hi"),
@@ -91,27 +96,39 @@ class DavisExtractor:
     def fetch_station(self, station: Station, start: date, end: date) -> list[dict[str, Any]]:
         """Baixa os registros brutos de uma estação, anexando os metadados.
 
+        As janelas da API são em UTC, mas os dias são agregados no fuso local
+        da estação. Por isso a coleta começa 1 dia antes e termina 1 dia depois
+        (limitado a "agora"): assim os dias locais ``start..end-1`` ficam
+        completos. Os dias das bordas saem parciais e devem ser descartados
+        (``Pipeline`` filtra pelo período).
+
         Args:
             station: Estação Davis.
             start: Data inicial (inclusive).
             end: Data final (exclusiva, como no script original).
 
         Returns:
-            Lista de registros brutos com os metadados da estação.
+            Lista de registros brutos (sem duplicatas) com os metadados da estação.
         """
         records: list[dict[str, Any]] = []
-        day = start
+        seen: set[tuple[Any, Any]] = set()
+        now = datetime.now(UTC)
+        cursor = datetime.combine(start - timedelta(days=1), datetime.min.time(), tzinfo=UTC)
+        stop = min(datetime.combine(end + timedelta(days=1), datetime.min.time(), tzinfo=UTC), now)
         step = timedelta(days=self.chunk_days)
-        while day < end:
-            chunk_end = min(day + step, end)
-            since = _to_epoch(datetime.combine(day, datetime.min.time()))
-            until = _to_epoch(datetime.combine(chunk_end, datetime.min.time()))
+        while cursor < stop:
+            chunk_end = min(cursor + step, stop)
             try:
-                chunk = self._fetch_chunk(station, since, until)
-                records.extend(chunk)
+                for rec in self._fetch_chunk(station, _to_epoch(cursor), _to_epoch(chunk_end)):
+                    # o registro no limite da janela pode vir nas duas chamadas
+                    key = (rec.get("lsid"), rec.get("ts"))
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    records.append(rec)
             except Exception:
-                logger.exception("Falha na janela %s..%s da estação %s", day, chunk_end, station.device)
-            day = chunk_end
+                logger.exception("Falha na janela %s..%s da estação %s", cursor, chunk_end, station.device)
+            cursor = chunk_end
         return records
 
     def fetch_all(self, start: date, end: date) -> list[dict[str, Any]]:

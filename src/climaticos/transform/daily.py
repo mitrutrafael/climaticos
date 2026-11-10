@@ -9,6 +9,7 @@ from typing import Any
 import pandas as pd
 
 from ..config import OUTPUT_COLUMNS
+from ..logging_setup import get_logger
 from .units import (
     calc_vpd,
     deg_to_compass,
@@ -18,6 +19,8 @@ from .units import (
     round1,
     w_m2_to_mj_day,
 )
+
+logger = get_logger("transform.daily")
 
 
 def _localtime(ts: int | None, tz_offset: int | None) -> str:
@@ -36,7 +39,30 @@ def _mean(values: Iterable[Any]) -> float | None:
     return sum(nums) / len(nums)
 
 
-def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
+# tamanho do basculante da Davis por código ``rain_size`` (em mm)
+_RAIN_SIZE_MM = {1: 0.254, 2: 0.2, 3: 0.1, 4: 0.0254}
+
+
+def _rain_mm(rec: dict[str, Any]) -> float:
+    """Chuva do intervalo em mm: ``rainfall_mm`` ou, na falta, polegadas/cliques."""
+    for key, factor in (("rainfall_mm", 1.0), ("rainfall_in", 25.4)):
+        value = rec.get(key)
+        if value is not None:
+            return float(value) * factor
+    clicks, size = rec.get("rainfall_clicks"), rec.get("rain_size")
+    if clicks is not None and size in _RAIN_SIZE_MM:
+        return float(clicks) * _RAIN_SIZE_MM[size]
+    return 0.0
+
+
+def _local_hour(ts: int | None, tz_offset: int | None) -> int | None:
+    """Hora local (0–23) de um registro."""
+    if ts is None:
+        return None
+    return (datetime.fromtimestamp(int(ts), tz=UTC) + timedelta(seconds=int(tz_offset or 0))).hour
+
+
+def aggregate_davis_records(records: Iterable[dict[str, Any]], min_hours: int = 0) -> pd.DataFrame:
     """Agrega registros brutos da Davis em uma linha diária por estação.
 
     Reproduz exatamente a agregação do script PowerShell original:
@@ -52,6 +78,9 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
 
     Args:
         records: Registros brutos do ``DavisExtractor``.
+        min_hours: Descarta dias com registros em menos horas locais distintas
+            que isso (dias incompletos subestimam chuva, ET e radiação e não
+            devem sobrescrever o histórico). ``0`` mantém todos.
 
     Returns:
         ``DataFrame`` no schema ``OUTPUT_COLUMNS``.
@@ -63,6 +92,11 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
 
     rows: list[dict[str, Any]] = []
     for (device, day), group in by_day.items():
+        if min_hours:
+            hours = {_local_hour(r.get("ts"), r.get("tz_offset")) for r in group} - {None}
+            if len(hours) < min_hours:
+                logger.warning("Davis %s %s incompleto (%d h de dados) — ignorado", device, day, len(hours))
+                continue
         first = group[0]
         temps_c = [fahrenheit_to_celsius(r.get("temp_out")) for r in group]
         rh = [r.get("hum_out") for r in group]
@@ -72,7 +106,7 @@ def aggregate_davis_records(records: Iterable[dict[str, Any]]) -> pd.DataFrame:
         t_max = round1(max(t_max_values)) if t_max_values else None
         t_min = round1(min(t_min_values)) if t_min_values else None
         rh_mean = round1(_mean(rh))
-        precip = round1(sum(r.get("rainfall_mm") or 0 for r in group))
+        precip = round1(sum(_rain_mm(r) for r in group))
         et = round1(sum(inches_to_mm(r.get("et")) or 0 for r in group))
         wind = round1(_mean(mph_to_ms(r.get("wind_speed_avg")) for r in group))
         wind_hi = [mph_to_ms(r.get("wind_speed_hi")) for r in group if r.get("wind_speed_hi") is not None]

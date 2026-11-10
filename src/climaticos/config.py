@@ -85,6 +85,7 @@ class Config:
         arable_url: URL base da Arable Cloud API.
         davis_url: URL base da WeatherLink v2.
         davis_chunk_days: Janela em dias por chamada à API Davis (limitada a 24 h).
+        davis_min_hours: Horas locais mínimas com dados para aceitar um dia Davis.
         request_timeout: Timeout em segundos por requisição HTTP.
         max_retries: Número máximo de tentativas por requisição.
         retry_backoff: Backoff base (s) entre tentativas.
@@ -99,6 +100,7 @@ class Config:
     arable_url: str = "https://api.arable.cloud/api/v2"
     davis_url: str = "https://api.weatherlink.com/v2"
     davis_chunk_days: int = 1
+    davis_min_hours: int = 20
     request_timeout: float = 30.0
     max_retries: int = 3
     retry_backoff: float = 1.0

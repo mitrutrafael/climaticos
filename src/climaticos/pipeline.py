@@ -84,7 +84,10 @@ class Pipeline:
                 client=client,
             )
             raw = extractor.fetch_all(start, end)
-        daily = aggregate_davis_records(raw)
+        daily = aggregate_davis_records(raw, min_hours=self.config.davis_min_hours)
+        # dias das bordas (coletados só para completar o fuso) ficam de fora
+        in_range = (daily["date"] >= start.isoformat()) & (daily["date"] < end.isoformat())
+        daily = daily[in_range].reset_index(drop=True)
         merged = upsert(daily, self.davis_path)
         write_csv_atomic(merged, self.davis_path)
         return daily
